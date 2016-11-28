@@ -28,6 +28,11 @@
         <artifactId>annotationProcessor</artifactId>
         <version>${project.version}</version>
         </dependency>
+        <dependency>
+        <groupId>org.corfudb</groupId>
+        <artifactId>router</artifactId>
+        <version>${project.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>net.bytebuddy</groupId>

@@ -1,7 +1,6 @@
 package org.corfudb.runtime.clients;
 
 import com.google.common.collect.ImmutableSet;
-import org.corfudb.infrastructure.AbstractServer;
 import org.corfudb.infrastructure.SequencerServer;
 import org.junit.Test;
 
@@ -18,20 +17,20 @@ public class SequencerClientTest extends AbstractClientTest {
 
     SequencerClient client;
 
-    @Override
-    Set<AbstractServer> getServersForTest() {
-        return new ImmutableSet.Builder<AbstractServer>()
-                .add(new SequencerServer(defaultServerContext()))
-                .build();
-    }
+   // @Override
+  // Set<AbstractServer> getServersForTest() {
+  //      return new ImmutableSet.Builder<AbstractServer>()
+   //             .add(new SequencerServer(defaultServerContext()))
+   //             .build();
+   // }
 
-    @Override
-    Set<IClient> getClientsForTest() {
-        client = new SequencerClient();
-        return new ImmutableSet.Builder<IClient>()
-                .add(client)
-                .build();
-    }
+  //  @Override
+  //  Set<IClient> getClientsForTest() {
+  //      client = new SequencerClient();
+  // /     return new ImmutableSet.Builder<IClient>()
+  //              .add(client)
+  //              .build();
+  //  }
 
     @Test
     public void canGetAToken()

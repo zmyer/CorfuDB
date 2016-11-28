@@ -22,7 +22,6 @@ public class ServerContextBuilder {
     int checkpoint = 100;
     String address = "test";
     int port = 9000;
-    IServerRouter serverRouter;
 
     public ServerContextBuilder() {
 
@@ -43,7 +42,7 @@ public class ServerContextBuilder {
                 .put("--checkpoint", checkpoint)
                 .put("--address", address)
                 .put("<port>", port);
-        return new ServerContext(builder.build(), serverRouter);
+        return new ServerContext(builder.build());
     }
 
     public static ServerContext defaultContext(int port) {

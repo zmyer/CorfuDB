@@ -1,19 +1,16 @@
 package org.corfudb.runtime.clients;
 
-import com.google.common.collect.ImmutableSet;
-import io.netty.channel.ChannelHandlerContext;
 import lombok.Getter;
-import lombok.Setter;
 import org.corfudb.protocols.wireprotocol.CorfuMsg;
 import org.corfudb.protocols.wireprotocol.CorfuMsgType;
-import org.corfudb.protocols.wireprotocol.CorfuPayloadMsg;
 import org.corfudb.protocols.wireprotocol.FailureDetectorMsg;
-import org.corfudb.runtime.exceptions.AlreadyBootstrappedException;
-import org.corfudb.runtime.exceptions.NoBootstrapException;
+import org.corfudb.router.AbstractRequestClient;
+import org.corfudb.router.ClientMsgHandler;
+import org.corfudb.router.IRequestClientRouter;
 import org.corfudb.runtime.view.Layout;
 
+import java.lang.invoke.MethodHandles;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -24,46 +21,17 @@ import java.util.concurrent.CompletableFuture;
  * <p>
  * Created by zlokhandwala on 11/4/16.
  */
-public class ManagementClient implements IClient {
+public class ManagementClient extends AbstractRequestClient<CorfuMsg, CorfuMsgType> {
 
-    /**
-     * The messages this client should handle.
-     */
+    /** The handler and handlers which implement this client. */
     @Getter
-    public final Set<CorfuMsgType> HandledTypes =
-            new ImmutableSet.Builder<CorfuMsgType>()
-                    .add(CorfuMsgType.MANAGEMENT_BOOTSTRAP)
-                    .add(CorfuMsgType.MANAGEMENT_NOBOOTSTRAP)
-                    .add(CorfuMsgType.MANAGEMENT_ALREADY_BOOTSTRAP)
-                    .add(CorfuMsgType.MANAGEMENT_FAILURE_DETECTED)
-                    .build();
+    public ClientMsgHandler<CorfuMsg,CorfuMsgType> msgHandler =
+            new ClientMsgHandler<CorfuMsg,CorfuMsgType>(this)
+                    .generateHandlers(MethodHandles.lookup(), this,
+                            ClientHandler.class, ClientHandler::type);
 
-    @Setter
-    @Getter
-    IClientRouter router;
-
-    /**
-     * Handle a incoming message on the channel
-     *
-     * @param msg The incoming message
-     * @param ctx The channel handler context
-     */
-    @Override
-    public void handleMessage(CorfuMsg msg, ChannelHandlerContext ctx) {
-        switch (msg.getMsgType()) {
-            case MANAGEMENT_BOOTSTRAP:
-                router.completeRequest(msg.getRequestID(), ((CorfuPayloadMsg<Layout>) msg).getPayload());
-                break;
-            case MANAGEMENT_NOBOOTSTRAP:
-                router.completeExceptionally(msg.getRequestID(), new NoBootstrapException());
-                break;
-            case MANAGEMENT_FAILURE_DETECTED:
-                router.completeRequest(msg.getRequestID(), ((CorfuPayloadMsg<FailureDetectorMsg>) msg).getPayload());
-                break;
-            case MANAGEMENT_ALREADY_BOOTSTRAP:
-                router.completeExceptionally(msg.getRequestID(), new AlreadyBootstrappedException());
-                break;
-        }
+    public ManagementClient(IRequestClientRouter<CorfuMsg, CorfuMsgType> router) {
+        super(router);
     }
 
     /**
@@ -74,7 +42,8 @@ public class ManagementClient implements IClient {
      * bootstrap was successful, false otherwise.
      */
     public CompletableFuture<Boolean> bootstrapManagement(Layout l) {
-        return router.sendMessageAndGetCompletable(CorfuMsgType.MANAGEMENT_BOOTSTRAP.payloadMsg(l));
+        return sendMessageAndGetResponse(CorfuMsgType.MANAGEMENT_BOOTSTRAP.payloadMsg(l))
+                .thenApply(x -> x.getMsgType() == CorfuMsgType.ACK_RESPONSE);
     }
 
     /**
@@ -84,6 +53,8 @@ public class ManagementClient implements IClient {
      * @return A future which will be return TRUE if completed successfully else returns FALSE.
      */
     public CompletableFuture<Boolean> handleFailure(Map nodes) {
-        return router.sendMessageAndGetCompletable(CorfuMsgType.MANAGEMENT_FAILURE_DETECTED.payloadMsg(new FailureDetectorMsg(nodes)));
+        return sendMessageAndGetResponse(CorfuMsgType.MANAGEMENT_FAILURE_DETECTED
+                .payloadMsg(new FailureDetectorMsg(nodes)))
+                .thenApply(x -> x.getMsgType() == CorfuMsgType.ACK_RESPONSE);
     }
 }

@@ -1,9 +1,7 @@
 package org.corfudb.runtime.clients;
 
 import com.google.common.collect.ImmutableSet;
-import org.corfudb.infrastructure.AbstractServer;
 import org.corfudb.infrastructure.BaseServer;
-import org.corfudb.infrastructure.LogUnitServer;
 import org.corfudb.util.CFUtils;
 import org.junit.Test;
 
@@ -16,6 +14,7 @@ public class BaseClientTest extends AbstractClientTest {
 
     BaseClient client;
 
+    /*
     @Override
     Set<AbstractServer> getServersForTest() {
         return new ImmutableSet.Builder<AbstractServer>()
@@ -30,7 +29,7 @@ public class BaseClientTest extends AbstractClientTest {
                 .add(client)
                 .build();
     }
-
+    */
     @Test
     public void canGetVersionInfo() {
         CFUtils.getUninterruptibly(client.getVersionInfo());

@@ -1,7 +1,6 @@
 package org.corfudb.runtime.clients;
 
 import com.google.common.collect.ImmutableSet;
-import org.corfudb.infrastructure.AbstractServer;
 import org.corfudb.infrastructure.LayoutServer;
 import org.corfudb.infrastructure.TestLayoutBuilder;
 import org.corfudb.runtime.exceptions.AlreadyBootstrappedException;
@@ -22,6 +21,7 @@ public class LayoutClientTest extends AbstractClientTest {
 
     LayoutClient client;
 
+    /*
     @Override
     Set<AbstractServer> getServersForTest() {
         return new ImmutableSet.Builder<AbstractServer>()
@@ -37,7 +37,7 @@ public class LayoutClientTest extends AbstractClientTest {
                 .add(client)
                 .build();
     }
-
+*/
     @Test
     public void nonBootstrappedServerThrowsException() {
         assertThatThrownBy(() -> {

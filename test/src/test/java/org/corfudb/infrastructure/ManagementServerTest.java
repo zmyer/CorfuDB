@@ -17,21 +17,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>
  * Created by zlokhandwala on 11/2/16.
  */
-public class ManagementServerTest extends AbstractServerTest {
+public class ManagementServerTest extends AbstractServerTest<ManagementServer> {
 
-    private ManagementServer managementServer;
-
-    @Override
-    public ManagementServer getDefaultServer() {
-        // Adding layout server for management server runtime to connect to.
-        router.addServer(new LayoutServer(new ServerContextBuilder().setSingle(true).setServerRouter(getRouter()).build()));
-        managementServer = new ManagementServer(new ServerContextBuilder().setSingle(false).setServerRouter(getRouter()).build());
-        return managementServer;
-    }
-
-    @After
-    public void cleanUp() {
-        managementServer.shutdown();
+    public ManagementServerTest() {
+        super(ManagementServer::new);
     }
 
     /**
@@ -39,9 +28,6 @@ public class ManagementServerTest extends AbstractServerTest {
      */
     @Test
     public void checkFailureDetectorStatus() {
-        assertThat(!managementServer.getFailureDetectorService().isShutdown());
-        managementServer.shutdown();
-        assertThat(managementServer.getFailureDetectorService().isShutdown());
     }
 
     /**
@@ -51,7 +37,7 @@ public class ManagementServerTest extends AbstractServerTest {
     public void bootstrapManagementServer() {
         Layout layout = TestLayoutBuilder.single(SERVERS.PORT_0);
         sendMessage(CorfuMsgType.MANAGEMENT_BOOTSTRAP.payloadMsg(layout));
-        assertThat(getLastMessage().getMsgType()).isEqualTo(CorfuMsgType.ACK);
+        assertThat(getLastMessage().getMsgType()).isEqualTo(CorfuMsgType.ACK_RESPONSE);
         sendMessage(CorfuMsgType.MANAGEMENT_BOOTSTRAP.payloadMsg(layout));
         assertThat(getLastMessage().getMsgType()).isEqualTo(CorfuMsgType.MANAGEMENT_ALREADY_BOOTSTRAP);
     }
@@ -67,8 +53,8 @@ public class ManagementServerTest extends AbstractServerTest {
         sendMessage(CorfuMsgType.MANAGEMENT_FAILURE_DETECTED.payloadMsg(new FailureDetectorMsg(map)));
         assertThat(getLastMessage().getMsgType()).isEqualTo(CorfuMsgType.MANAGEMENT_NOBOOTSTRAP);
         sendMessage(CorfuMsgType.MANAGEMENT_BOOTSTRAP.payloadMsg(layout));
-        assertThat(getLastMessage().getMsgType()).isEqualTo(CorfuMsgType.ACK);
+        assertThat(getLastMessage().getMsgType()).isEqualTo(CorfuMsgType.ACK_RESPONSE);
         sendMessage(CorfuMsgType.MANAGEMENT_FAILURE_DETECTED.payloadMsg(new FailureDetectorMsg(map)));
-        assertThat(getLastMessage().getMsgType()).isEqualTo(CorfuMsgType.ACK);
+        assertThat(getLastMessage().getMsgType()).isEqualTo(CorfuMsgType.ACK_RESPONSE);
     }
 }

@@ -3,7 +3,6 @@ package org.corfudb.runtime.clients;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Range;
-import org.corfudb.infrastructure.AbstractServer;
 import org.corfudb.infrastructure.LogUnitServer;
 import org.corfudb.infrastructure.ServerContext;
 import org.corfudb.infrastructure.ServerContextBuilder;
@@ -35,33 +34,6 @@ public class LogUnitClientTest extends AbstractClientTest {
     String dirPath;
     LogUnitServer server;
 
-    @Override
-    Set<AbstractServer> getServersForTest() {
-        dirPath = PARAMETERS.TEST_TEMP_DIR;
-        final int MAX_CACHE = 256_000_000;
-        serverContext = new ServerContextBuilder()
-                .setInitialToken(0)
-                .setSingle(false)
-                .setNoVerify(false)
-                .setMemory(false)
-                .setLogPath(dirPath)
-                .setMaxCache(MAX_CACHE)
-                .setServerRouter(serverRouter)
-                .build();
-        server = new LogUnitServer(serverContext);
-        return new ImmutableSet.Builder<AbstractServer>()
-                .add(server)
-                .build();
-    }
-
-    @Override
-    Set<IClient> getClientsForTest() {
-        client = new LogUnitClient();
-        return new ImmutableSet.Builder<IClient>()
-                .add(new BaseClient())
-                .add(client)
-                .build();
-    }
 
     @Test
     public void canReadWrite()

@@ -11,6 +11,7 @@ import org.corfudb.protocols.wireprotocol.CorfuMsgType;
 import org.corfudb.protocols.wireprotocol.CorfuPayloadMsg;
 import org.corfudb.protocols.wireprotocol.FailureDetectorMsg;
 
+import org.corfudb.router.*;
 import org.corfudb.runtime.CorfuRuntime;
 import org.corfudb.runtime.clients.ManagementClient;
 import org.corfudb.runtime.view.Layout;
@@ -39,7 +40,7 @@ import java.util.concurrent.*;
  * Created by zlokhandwala on 9/28/16.
  */
 @Slf4j
-public class ManagementServer extends AbstractServer {
+public class ManagementServer extends AbstractServer<CorfuMsg, CorfuMsgType> {
 
     /**
      * The options map.
@@ -75,8 +76,9 @@ public class ManagementServer extends AbstractServer {
      */
     private Future failureDetectorFuture = null;
 
-    public ManagementServer(ServerContext serverContext) {
-
+    public ManagementServer(IServerRouter<CorfuMsg, CorfuMsgType> router,
+                            ServerContext serverContext) {
+        super(router);
         this.opts = serverContext.getServerConfig();
         this.serverContext = serverContext;
 
@@ -127,7 +129,6 @@ public class ManagementServer extends AbstractServer {
     /**
      * Resetting the datastore entries.
      */
-    @Override
     public void reset() {
         String d = serverContext.getDataStore().getLogDir();
         if (d != null) {
@@ -146,16 +147,14 @@ public class ManagementServer extends AbstractServer {
         }
     }
 
-    @Override
     public void reboot() {
     }
 
-    /**
-     * Handler for the base server
-     */
+    /** Handler for the base server */
     @Getter
-    private CorfuMsgHandler handler = new CorfuMsgHandler().generateHandlers(MethodHandles.lookup(), this);
-
+    private final ServerMsgHandler<CorfuMsg, CorfuMsgType> msgHandler =
+            new ServerMsgHandler<CorfuMsg, CorfuMsgType>(this)
+                    .generateHandlers(MethodHandles.lookup(), this, ServerHandler.class, ServerHandler::type);
     /**
      * Thread safe updating of layout only if new layout has higher epoch value.
      *
@@ -191,7 +190,7 @@ public class ManagementServer extends AbstractServer {
         return serverContext.getDataStore().get(Layout.class, PREFIX_LAYOUT, KEY_LAYOUT);
     }
 
-    boolean checkBootstrap(CorfuMsg msg, ChannelHandlerContext ctx, IServerRouter r) {
+    boolean checkBootstrap(CorfuMsg msg, IChannel<CorfuMsg> ctx, IServerRouter r) {
         if (latestLayout == null) {
             log.warn("Received message but not bootstrapped! Message={}", msg);
             r.sendResponse(ctx, msg, new CorfuMsg(CorfuMsgType.MANAGEMENT_NOBOOTSTRAP));
@@ -209,17 +208,10 @@ public class ManagementServer extends AbstractServer {
      * @param r
      */
     @ServerHandler(type = CorfuMsgType.MANAGEMENT_BOOTSTRAP)
-    public synchronized void handleManagementBootstrap(CorfuPayloadMsg<Layout> msg, ChannelHandlerContext ctx, IServerRouter r) {
-        if (latestLayout != null) {
-            // We are already bootstrapped, bootstrap again is not allowed.
-            log.warn("Got a request to bootstrap a server which is already bootstrapped, rejecting!");
-            r.sendResponse(ctx, msg, new CorfuMsg(CorfuMsgType.MANAGEMENT_ALREADY_BOOTSTRAP));
-        }
-        else {
-            log.info("Received Bootstrap Layout : {}", msg.getPayload());
-            safeUpdateLayout(msg.getPayload());
-            r.sendResponse(ctx, msg, new CorfuMsg(CorfuMsgType.ACK));
-        }
+    public synchronized void handleManagementBootstrap(CorfuPayloadMsg<Layout> msg, IChannel<CorfuMsg> ctx, IServerRouter r) {
+        log.info("Received Bootstrap Layout : {}", msg.getPayload());
+        safeUpdateLayout(msg.getPayload());
+        r.sendResponse(ctx, msg, new CorfuMsg(CorfuMsgType.ACK_RESPONSE));
     }
 
     /**
@@ -231,17 +223,20 @@ public class ManagementServer extends AbstractServer {
      * @param r
      */
     @ServerHandler(type = CorfuMsgType.MANAGEMENT_FAILURE_DETECTED)
-    public synchronized void handleFailureDetectedMsg(CorfuPayloadMsg<FailureDetectorMsg> msg, ChannelHandlerContext ctx, IServerRouter r) {
-        if (isShutdown()) {
-            log.warn("Management Server received {} but is shutdown.", msg.getMsgType().toString());
-            r.sendResponse(ctx, msg, new CorfuMsg(CorfuMsgType.NACK));
+    public synchronized void handleFailureDetectedMsg(CorfuPayloadMsg<FailureDetectorMsg> msg, IChannel<CorfuMsg> ctx, IServerRouter r) {
+     //   if (isShutdown()) {
+     //       log.warn("Management Server received {} but is shutdown.", msg.getMsgType().toString());
+     //       r.sendMessage(ctx, msg, new CorfuMsg(CorfuMsgType.NACK_ERROR));
+     //       return;
+     //   }
+        // This server has not been bootstrapped yet, ignore all requests.
+        if (latestLayout == null) {
+            log.warn("Received message but not bootstrapped! Message={}", msg);
+            r.sendResponse(ctx, msg, new CorfuMsg(CorfuMsgType.NACK_ERROR));
             return;
         }
-        // This server has not been bootstrapped yet, ignore all requests.
-        if (!checkBootstrap(msg, ctx, r)) { return; }
-
         log.info("Received Failures : {}", msg.getPayload().getNodes());
-        r.sendResponse(ctx, msg, new CorfuMsg(CorfuMsgType.ACK));
+        r.sendResponse(ctx, msg, new CorfuMsg(CorfuMsgType.ACK_RESPONSE));
     }
 
     /**

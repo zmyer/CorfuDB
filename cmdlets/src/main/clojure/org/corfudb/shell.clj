@@ -1,7 +1,8 @@
 (ns org.corfudb.shell)
 
 (import org.corfudb.runtime.CorfuRuntime)
-(import org.corfudb.runtime.clients.NettyClientRouter)
+(import org.corfudb.router.netty.NettyClientRouter)
+
 (import org.docopt.Docopt)
 (use 'clojure.reflect)
 
@@ -90,12 +91,8 @@ The variable *r holds the last runtime obtrained, and *o holds the last router o
   ([client, router] (.. router (addClient client))))
 (defn get-runtime [endpoint] (def *r (new CorfuRuntime endpoint)) *r)
 (defn get-router [endpoint]  (do
-   (def *o (new NettyClientRouter (get-host endpoint) (get-port endpoint))))
-   (add-client (new org.corfudb.runtime.clients.LayoutClient))
-   (add-client (new org.corfudb.runtime.clients.LogUnitClient))
-   (add-client (new org.corfudb.runtime.clients.SequencerClient))
-   (add-client (new org.corfudb.runtime.clients.ManagementClient))
-  *o)
+   (def *o (.apply (.. CorfuRuntime/overrideGetRouterFunction endpoint)))
+   *o))
 (defn connect-runtime ([] (.. *r (connect)))
                           ([runtime] (.. runtime (connect))))
 

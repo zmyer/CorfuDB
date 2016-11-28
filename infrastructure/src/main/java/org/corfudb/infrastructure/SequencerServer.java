@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.corfudb.protocols.wireprotocol.*;
 import org.corfudb.protocols.wireprotocol.CorfuMsgType;
+import org.corfudb.router.*;
 import org.corfudb.util.Utils;
 
 import java.io.File;
@@ -30,12 +31,12 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>
  * It currently supports a single operation, which is a incoming request:
  * <p>
- * TOKEN_REQ - Request the next token.
+ * TOKEN_REQUEST - Request the next token.
  * <p>
  * Created by mwei on 12/8/15.
  */
 @Slf4j
-public class SequencerServer extends AbstractServer {
+public class SequencerServer extends AbstractEpochedServer<SequencerServer> {
 
     /**
      * A scheduler, which is used to schedule checkpoints and lease renewal
@@ -47,8 +48,7 @@ public class SequencerServer extends AbstractServer {
                             .setDaemon(true)
                             .setNameFormat("Seq-Checkpoint-%d")
                             .build());
-    @Getter
-    long epoch;
+
     AtomicLong globalLogTail;
 
     /**
@@ -62,10 +62,11 @@ public class SequencerServer extends AbstractServer {
      */
     private Map<String, Object> opts;
 
-    /** Handler for this server */
+    /** Handler for the base server */
     @Getter
-    private CorfuMsgHandler handler = new CorfuMsgHandler()
-            .generateHandlers(MethodHandles.lookup(), this);
+    private final PreconditionServerMsgHandler<CorfuMsg, CorfuMsgType, SequencerServer> preconditionMsgHandler =
+            new PreconditionServerMsgHandler<CorfuMsg, CorfuMsgType, SequencerServer>(this)
+                    .generateHandlers(MethodHandles.lookup(), this, ServerHandler.class, ServerHandler::type);
 
     /**
      * map from stream-trails to global-log tails. used for backpointers.
@@ -77,7 +78,10 @@ public class SequencerServer extends AbstractServer {
      */
     ConcurrentHashMap<UUID, Long> streamTailMap;
 
-    public SequencerServer(ServerContext serverContext) {
+    public SequencerServer(
+            IServerRouter<CorfuMsg, CorfuMsgType> router,
+            ServerContext serverContext) {
+        super(router, serverContext);
         Map<String, Object> opts = serverContext.getServerConfig();
         streamTailToGlobalTailMap = new ConcurrentHashMap<>();
         streamTailMap = new ConcurrentHashMap<>();
@@ -174,8 +178,7 @@ public class SequencerServer extends AbstractServer {
         return commit.get();
     }
 
-    public void returnLatestOffsets(CorfuPayloadMsg<TokenRequest> msg,
-                                    ChannelHandlerContext ctx, IServerRouter r) {
+    private CorfuMsg returnLatestOffsets(CorfuPayloadMsg<TokenRequest> msg) {
         TokenRequest req = msg.getPayload();
 
         long maxStreamGlobalTails = -1L;
@@ -199,39 +202,36 @@ public class SequencerServer extends AbstractServer {
 
         // If no streams are specified in the request, this value returns the last global token issued.
         long responseGlobalTail = (req.getStreams().size() == 0) ? globalLogTail.get() - 1 : maxStreamGlobalTails;
-        r.sendResponse(ctx, msg, CorfuMsgType.TOKEN_RES.payloadMsg(
-                new TokenResponse(responseGlobalTail, Collections.emptyMap(), responseStreamTails.build())));
+        return CorfuMsgType.TOKEN_RESPONSE.payloadMsg(
+                new TokenResponse(responseGlobalTail, Collections.emptyMap(), responseStreamTails.build()));
     }
 
     /**
      * Service an incoming token request.
      */
-    @ServerHandler(type=CorfuMsgType.TOKEN_REQ)
-    public synchronized void tokenRequest(CorfuPayloadMsg<TokenRequest> msg,
-                                          ChannelHandlerContext ctx, IServerRouter r) {
+    @ServerHandler(type=CorfuMsgType.TOKEN_REQUEST)
+    public synchronized CorfuMsg tokenRequest(CorfuPayloadMsg<TokenRequest> msg,
+                                              IChannel<CorfuMsg> channel) {
         TokenRequest req = msg.getPayload();
         log.trace("req txn reso: {}", req.getTxnResolution());
 
         // if requested number of tokens is zero, it is just a query of current tail(s)
         if (req.getNumTokens() == 0) {
-            returnLatestOffsets(msg, ctx, r);
-            return;
+            return returnLatestOffsets(msg);
         }
 
         // if no streams, simply allocate a position at the tail of the global log
         if (req.getStreams() == null) {
-            r.sendResponse(ctx, msg, CorfuMsgType.TOKEN_RES.payloadMsg(
-                    new TokenResponse(globalLogTail.getAndAdd(req.getNumTokens()), Collections.emptyMap(), Collections.emptyMap())));
-            return;
+            return CorfuMsgType.TOKEN_RESPONSE.payloadMsg(
+                    new TokenResponse(globalLogTail.getAndAdd(req.getNumTokens()), Collections.emptyMap(), Collections.emptyMap()));
         }
 
         // If the request is a transaction resolution request, then check if it should abort.
         if (req.getTxnResolution()) {
             if (!txnResolution(req.getReadTimestamp(), req.getReadSet())) {
                 // If the txn aborts, then DO NOT hand out a token.
-                r.sendResponse(ctx, msg, CorfuMsgType.TOKEN_RES.payloadMsg(
-                        new TokenResponse(-1L, Collections.emptyMap(), Collections.emptyMap())));
-                return;
+                return CorfuMsgType.TOKEN_RESPONSE.payloadMsg(
+                        new TokenResponse(-1L, Collections.emptyMap(), Collections.emptyMap()));
             }
         }
 
@@ -280,13 +280,12 @@ public class SequencerServer extends AbstractServer {
             }
         }
 
-        r.sendResponse(ctx, msg, CorfuMsgType.TOKEN_RES.payloadMsg(
+        return CorfuMsgType.TOKEN_RESPONSE.payloadMsg(
                 new TokenResponse(currentTail,
                         backPointerMap.build(),
-                        requestStreamTokens.build())));
+                        requestStreamTokens.build()));
     }
 
-    @Override
     public void reset() {
         if (fc != null) {
             synchronized (fcLock) {
@@ -302,7 +301,6 @@ public class SequencerServer extends AbstractServer {
         reboot();
     }
 
-    @Override
     public synchronized void reboot() {
             streamTailToGlobalTailMap = new ConcurrentHashMap<>();
             streamTailMap = new ConcurrentHashMap<>();
@@ -332,7 +330,6 @@ public class SequencerServer extends AbstractServer {
     /**
      * Shutdown the server.
      */
-    @Override
     public void shutdown() {
         try {
             scheduler.shutdownNow();

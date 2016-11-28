@@ -22,7 +22,11 @@
             <artifactId>infrastructure</artifactId>
             <version>${project.version}</version>
         </dependency>
-
+        <dependency>
+            <groupId>org.corfudb</groupId>
+            <artifactId>router</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <!-- External Dependencies -->
         <dependency>

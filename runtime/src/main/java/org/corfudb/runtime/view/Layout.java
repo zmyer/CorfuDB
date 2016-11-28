@@ -86,8 +86,8 @@ public class Layout implements Cloneable {
         // Collect a list of all servers in the system.
         getAllServers().stream()
                 .map(runtime::getRouter)
-                .map(x -> x.getClient(BaseClient.class))
-                .forEach(x -> CFUtils.getUninterruptibly(x.setRemoteEpoch(epoch)));
+                .map(x -> x.getClient(LayoutClient.class));
+               // .forEach(x -> CFUtils.getUninterruptibly(x.(epoch)));
     }
 
     /**

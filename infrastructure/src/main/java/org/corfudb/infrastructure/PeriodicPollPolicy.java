@@ -1,9 +1,11 @@
 package org.corfudb.infrastructure;
 
 import lombok.extern.slf4j.Slf4j;
+import org.corfudb.protocols.wireprotocol.CorfuMsg;
+import org.corfudb.protocols.wireprotocol.CorfuMsgType;
+import org.corfudb.router.IClientRouter;
 import org.corfudb.runtime.CorfuRuntime;
 import org.corfudb.runtime.clients.BaseClient;
-import org.corfudb.runtime.clients.IClientRouter;
 import org.corfudb.runtime.view.Layout;
 
 import java.util.Arrays;
@@ -27,7 +29,7 @@ public class PeriodicPollPolicy implements IFailureDetectorPolicy {
      * list of layout servers that we monitor.
      */
     private String[] historyServers = null;
-    private IClientRouter[] historyRouters = null;
+    private IClientRouter<CorfuMsg,CorfuMsgType>[] historyRouters = null;
 
     /**
      * polling history
@@ -93,9 +95,9 @@ public class PeriodicPollPolicy implements IFailureDetectorPolicy {
                     historyStatus.put(allServers[i], true);  // Assume it's up until we think it isn't.
                 }
                 historyRouters[i] = corfuRuntime.getRouterFunction.apply(allServers[i]);
-                historyRouters[i].setTimeoutConnect(timeoutConnect);
-                historyRouters[i].setTimeoutRetry(timeoutRetry);
-                historyRouters[i].setTimeoutResponse(timeoutResponse);
+              //  historyRouters[i].setTimeoutConnect(timeoutConnect);
+              //  historyRouters[i].setTimeoutRetry(timeoutRetry);
+              //  historyRouters[i].setTimeoutResponse(timeoutResponse);
                 historyRouters[i].start();
                 historyPollFailures[i] = 0;
             }

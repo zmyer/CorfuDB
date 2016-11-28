@@ -1,16 +1,18 @@
 package org.corfudb.runtime.clients;
 
-import com.google.common.collect.ImmutableSet;
+import com.google.common.reflect.TypeToken;
 import io.netty.channel.ChannelHandlerContext;
 import lombok.Getter;
-import lombok.Setter;
 import org.corfudb.protocols.wireprotocol.*;
+import org.corfudb.router.AbstractRequestClient;
+import org.corfudb.router.ClientMsgHandler;
+import org.corfudb.router.IRequestClientRouter;
 import org.corfudb.runtime.exceptions.AlreadyBootstrappedException;
 import org.corfudb.runtime.exceptions.NoBootstrapException;
 import org.corfudb.runtime.exceptions.OutrankedException;
 import org.corfudb.runtime.view.Layout;
 
-import java.util.Set;
+import java.lang.invoke.MethodHandles;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -22,72 +24,27 @@ import java.util.concurrent.CompletableFuture;
  * </p>
  * Created by mwei on 12/9/15.
  */
-public class LayoutClient implements IClient {
+public class LayoutClient extends AbstractRequestClient<CorfuMsg, CorfuMsgType> {
 
-    /**
-     * The messages this client should handle.
-     */
+    /** The handler and handlers which implement this client. */
     @Getter
-    public final Set<CorfuMsgType> HandledTypes =
-            new ImmutableSet.Builder<CorfuMsgType>()
-                    .add(CorfuMsgType.LAYOUT_REQUEST)
-                    .add(CorfuMsgType.LAYOUT_RESPONSE)
-                    .add(CorfuMsgType.LAYOUT_PREPARE)
-                    .add(CorfuMsgType.LAYOUT_BOOTSTRAP)
-                    .add(CorfuMsgType.LAYOUT_NOBOOTSTRAP)
-                    .add(CorfuMsgType.LAYOUT_PREPARE_ACK)
-                    .add(CorfuMsgType.LAYOUT_PREPARE_REJECT)
-                    .add(CorfuMsgType.LAYOUT_PROPOSE_REJECT)
-                    .add(CorfuMsgType.LAYOUT_ALREADY_BOOTSTRAP)
-                    .build();
+    public ClientMsgHandler<CorfuMsg,CorfuMsgType> msgHandler =
+            new ClientMsgHandler<CorfuMsg,CorfuMsgType>(this)
+                    .generateHandlers(MethodHandles.lookup(), this,
+                            ClientHandler.class, ClientHandler::type);
 
-    @Setter
-    @Getter
-    IClientRouter router;
-
-    /**
-     * Handle a incoming message on the channel
-     *
-     * @param msg The incoming message
-     * @param ctx The channel handler context
-     */
-    @Override
-    public void handleMessage(CorfuMsg msg, ChannelHandlerContext ctx) {
-        switch (msg.getMsgType()) {
-            case LAYOUT_RESPONSE:
-                router.completeRequest(msg.getRequestID(), ((LayoutMsg) msg).getLayout());
-                break;
-            case LAYOUT_NOBOOTSTRAP:
-                router.completeExceptionally(msg.getRequestID(), new NoBootstrapException());
-                break;
-            case LAYOUT_PREPARE_ACK: {
-                router.completeRequest(msg.getRequestID(), ((CorfuPayloadMsg<LayoutPrepareResponse>) msg).getPayload());
-            }
-                break;
-            case LAYOUT_PREPARE_REJECT: {
-                LayoutPrepareResponse response = ((CorfuPayloadMsg<LayoutPrepareResponse>) msg).getPayload();
-                router.completeExceptionally(msg.getRequestID(), new OutrankedException(response.getRank(), response.getLayout()));
-            }
-                break;
-            case LAYOUT_PROPOSE_REJECT: {
-                LayoutProposeResponse response = ((CorfuPayloadMsg<LayoutProposeResponse>) msg).getPayload();
-                router.completeExceptionally(msg.getRequestID(), new OutrankedException(response.getRank()));
-            }
-                break;
-            case LAYOUT_ALREADY_BOOTSTRAP:
-                router.completeExceptionally(msg.getRequestID(), new AlreadyBootstrappedException());
-                break;
-        }
+    public LayoutClient(IRequestClientRouter<CorfuMsg, CorfuMsgType> router) {
+        super(router);
     }
-
-
 
     /**
      * Retrieves the layout from the endpoint, asynchronously.
      * @return A future which will be completed with the current layout.
      */
     public CompletableFuture<Layout> getLayout() {
-        return router.sendMessageAndGetCompletable(CorfuMsgType.LAYOUT_REQUEST.payloadMsg(router.getEpoch()));
+        // Why does this request need the epoch?
+        return sendMessageAndGetResponse(CorfuMsgType.LAYOUT_REQUEST.payloadMsg(0L), LayoutMsg.class)
+                .thenApply(LayoutMsg::getLayout);
     }
 
     /**
@@ -98,7 +55,9 @@ public class LayoutClient implements IClient {
      */
     public CompletableFuture<Boolean>  bootstrapLayout(Layout l)
     {
-        return router.sendMessageAndGetCompletable(CorfuMsgType.LAYOUT_BOOTSTRAP.payloadMsg(new LayoutBootstrapRequest(l)));
+        return sendMessageAndGetResponse(CorfuMsgType.LAYOUT_BOOTSTRAP
+                .payloadMsg(new LayoutBootstrapRequest(l)))
+                .thenApply(x -> x.getMsgType() == CorfuMsgType.ACK_RESPONSE);
     }
 
     /**
@@ -111,7 +70,10 @@ public class LayoutClient implements IClient {
      */
     public CompletableFuture<LayoutPrepareResponse> prepare(long epoch, long rank)
     {
-        return router.sendMessageAndGetCompletable(CorfuMsgType.LAYOUT_PREPARE.payloadMsg(new LayoutPrepareRequest(epoch, rank)));
+        return sendMessageAndGetResponse(CorfuMsgType.LAYOUT_PREPARE
+                        .payloadMsg(new LayoutPrepareRequest(epoch, rank)),
+                new TypeToken<CorfuPayloadMsg<LayoutPrepareResponse>>() {})
+                .thenApply(CorfuPayloadMsg::getPayload);
     }
 
     /**
@@ -126,8 +88,10 @@ public class LayoutClient implements IClient {
      */
     public CompletableFuture<Boolean> propose(long epoch, long rank, Layout layout)
     {
-        return router.sendMessageAndGetCompletable(CorfuMsgType.LAYOUT_PROPOSE.payloadMsg(new LayoutProposeRequest(epoch, rank, layout)));
-
+        // TODO: return previous
+        return sendMessageAndGetResponse(CorfuMsgType.LAYOUT_PROPOSE
+                .payloadMsg(new LayoutProposeRequest(epoch, rank, layout)))
+                .thenApply(x -> x.getMsgType() == CorfuMsgType.ACK_RESPONSE);
     }
 
     /**
@@ -138,7 +102,9 @@ public class LayoutClient implements IClient {
      */
     public CompletableFuture<Boolean> committed(long epoch, Layout layout)
     {
-        return router.sendMessageAndGetCompletable(CorfuMsgType.LAYOUT_COMMITTED.payloadMsg(new LayoutCommittedRequest(epoch, layout)));
+        return sendMessageAndGetResponse(CorfuMsgType.LAYOUT_COMMITTED
+                .payloadMsg(new LayoutCommittedRequest(epoch, layout)))
+                .thenApply(x -> x.getMsgType() == CorfuMsgType.ACK_RESPONSE);
     }
 
 }

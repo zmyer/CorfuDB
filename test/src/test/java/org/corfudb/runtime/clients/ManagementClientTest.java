@@ -2,6 +2,7 @@ package org.corfudb.runtime.clients;
 
 import com.google.common.collect.ImmutableSet;
 import org.corfudb.infrastructure.*;
+import org.corfudb.router.AbstractServer;
 import org.junit.After;
 import org.junit.Test;
 
@@ -23,6 +24,7 @@ public class ManagementClientTest extends AbstractClientTest {
     ManagementClient client;
     ManagementServer server;
 
+    /*
     @Override
     Set<AbstractServer> getServersForTest() {
         final int MAX_CACHE = 256_000_000;
@@ -39,7 +41,8 @@ public class ManagementClientTest extends AbstractClientTest {
                 .add(new LayoutServer(serverContext))
                 .build();
     }
-
+*/
+/*
     @Override
     Set<IClient> getClientsForTest() {
         client = new ManagementClient();
@@ -48,7 +51,7 @@ public class ManagementClientTest extends AbstractClientTest {
                 .add(client)
                 .build();
     }
-
+*/
     /**
      * Need to shutdown the servers after test.
      */

@@ -1,6 +1,5 @@
 package org.corfudb.runtime.clients;
 
-import org.corfudb.infrastructure.IServerRouter;
 import org.corfudb.protocols.wireprotocol.CorfuMsg;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -101,10 +100,10 @@ public class TestRule {
             if (dropOdd && matchNumber % 2 != 0) return false;
             if (dropEven && matchNumber % 2 == 0) return false;
             if (transformer != null) transformer.accept(message);
-            if (injectBefore != null && router instanceof IClientRouter)
-                ((IClientRouter)router).sendMessage(null, injectBefore.apply(message));
-            if (injectBefore != null && router instanceof IServerRouter)
-                ((IServerRouter)router).sendResponse(null, injectBefore.apply(message), injectBefore.apply(message));
+           // if (injectBefore != null && router instanceof IClientRouter)
+           //     ((IClientRouter)router).sendMessage(null, injectBefore.apply(message));
+           // if (injectBefore != null && router instanceof IServerRouter)
+           //     ((IServerRouter)router).sendResponse(null, injectBefore.apply(message), injectBefore.apply(message));
         }
         return true;
     }

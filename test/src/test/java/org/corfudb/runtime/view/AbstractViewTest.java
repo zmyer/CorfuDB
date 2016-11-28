@@ -4,24 +4,20 @@ import lombok.Data;
 import lombok.Getter;
 import org.corfudb.AbstractCorfuTest;
 import org.corfudb.infrastructure.BaseServer;
-import org.corfudb.infrastructure.IServerRouter;
 import org.corfudb.infrastructure.LayoutServer;
 import org.corfudb.infrastructure.LogUnitServer;
 import org.corfudb.infrastructure.ManagementServer;
 import org.corfudb.infrastructure.SequencerServer;
 import org.corfudb.infrastructure.ServerContext;
 import org.corfudb.infrastructure.ServerContextBuilder;
-import org.corfudb.infrastructure.TestServerRouter;
+import org.corfudb.protocols.wireprotocol.CorfuMsg;
 import org.corfudb.protocols.wireprotocol.CorfuMsgType;
 import org.corfudb.protocols.wireprotocol.LayoutBootstrapRequest;
+import org.corfudb.router.IRequestClientRouter;
+import org.corfudb.router.IServerRouter;
+import org.corfudb.router.test.TestClientRouter;
+import org.corfudb.router.test.TestServerRouter;
 import org.corfudb.runtime.CorfuRuntime;
-import org.corfudb.runtime.clients.BaseClient;
-import org.corfudb.runtime.clients.IClientRouter;
-import org.corfudb.runtime.clients.LayoutClient;
-import org.corfudb.runtime.clients.LogUnitClient;
-import org.corfudb.runtime.clients.ManagementClient;
-import org.corfudb.runtime.clients.SequencerClient;
-import org.corfudb.runtime.clients.TestClientRouter;
 import org.corfudb.runtime.clients.TestRule;
 import org.junit.After;
 import org.junit.Before;
@@ -67,7 +63,7 @@ public abstract class AbstractViewTest extends AbstractCorfuTest {
     final Map<String, TestServer> testServerMap = new ConcurrentHashMap<>();
 
     /** A map of maps to endpoint->routers, mapped for each runtime instance captured */
-    final Map<CorfuRuntime, Map<String, TestClientRouter>>
+    final Map<CorfuRuntime, Map<String, TestClientRouter<CorfuMsg,CorfuMsgType>>>
             runtimeRouterMap = new ConcurrentHashMap<>();
 
     /** Initialize the AbstractViewTest. */
@@ -83,20 +79,17 @@ public abstract class AbstractViewTest extends AbstractCorfuTest {
      * @param endpoint      An endpoint string for the router.
      * @return
      */
-    private IClientRouter getRouterFunction(CorfuRuntime runtime, String endpoint) {
+    private IRequestClientRouter<CorfuMsg, CorfuMsgType> getRouterFunction(CorfuRuntime runtime, String endpoint) {
         runtimeRouterMap.putIfAbsent(runtime, new ConcurrentHashMap<>());
         if (!endpoint.startsWith("test:")) {
             throw new RuntimeException("Unsupported endpoint in test: " + endpoint);
         }
         return runtimeRouterMap.get(runtime).computeIfAbsent(endpoint,
                 x -> {
-                    TestClientRouter tcn =
-                            new TestClientRouter(testServerMap.get(endpoint).getServerRouter());
-                    tcn.addClient(new BaseClient())
-                            .addClient(new SequencerClient())
-                            .addClient(new LayoutClient())
-                            .addClient(new LogUnitClient())
-                            .addClient(new ManagementClient());
+                    TestClientRouter<CorfuMsg, CorfuMsgType> tcn =
+                            TestClientRouter.<CorfuMsg, CorfuMsgType>builder()
+                                    .setEndpoint(testServerMap.get(endpoint).getServerRouter())
+                                    .build();
                     return tcn;
                 }
         );
@@ -127,7 +120,7 @@ public abstract class AbstractViewTest extends AbstractCorfuTest {
      * @param config    The configuration to use for the server.
      */
     public void addServer(int port, Map<String, Object> config) {
-        addServer(port, new ServerContext(config, new TestServerRouter(port)));
+        addServer(port, new ServerContext(config));
     }
 
     /**
@@ -144,7 +137,7 @@ public abstract class AbstractViewTest extends AbstractCorfuTest {
      * @param port      The port to use.
      */
     public void addServer(int port) {
-        new TestServer(new ServerContextBuilder().setSingle(false).setServerRouter(new TestServerRouter(port)).setPort(port).build()).addToTest(port, this);
+        new TestServer(new ServerContextBuilder().setSingle(false).setPort(port).build()).addToTest(port, this);
     }
 
 
@@ -212,7 +205,7 @@ public abstract class AbstractViewTest extends AbstractCorfuTest {
         return getServer(port).getBaseServer();
     }
 
-    public IServerRouter getServerRouter(int port) {
+    public IServerRouter<CorfuMsg, CorfuMsgType> getServerRouter(int port) {
         return getServer(port).getServerRouter();
     }
 
@@ -227,10 +220,10 @@ public abstract class AbstractViewTest extends AbstractCorfuTest {
                     e.getValue().layoutServer.reset();
                     e.getValue().layoutServer
                             .handleMessage(CorfuMsgType.LAYOUT_BOOTSTRAP.payloadMsg(new LayoutBootstrapRequest(l)),
-                                    null, e.getValue().serverRouter);
+                                    null);
                     e.getValue().managementServer
                             .handleMessage(CorfuMsgType.MANAGEMENT_BOOTSTRAP.payloadMsg(l),
-                                    null, e.getValue().serverRouter);
+                                    null);
                 });
     }
 
@@ -266,7 +259,7 @@ public abstract class AbstractViewTest extends AbstractCorfuTest {
      * @param r     The runtime to clear rules for.
      */
     public void clearClientRules(CorfuRuntime r) {
-        runtimeRouterMap.get(r).values().forEach(x -> x.rules.clear());
+        runtimeRouterMap.get(r).values().forEach(x -> {}); //x.rules.clear());
     }
 
     /** Add a rule for the default runtime.
@@ -283,7 +276,7 @@ public abstract class AbstractViewTest extends AbstractCorfuTest {
      * @param rule  The rule to install.
      */
     public void addClientRule(CorfuRuntime r, TestRule rule) {
-        runtimeRouterMap.get(r).values().forEach(x -> x.rules.add(rule));
+        runtimeRouterMap.get(r).values().forEach(x -> {}); // x.rules.add(rule));
     }
 
     /** Clear rules for a particular server.
@@ -291,8 +284,8 @@ public abstract class AbstractViewTest extends AbstractCorfuTest {
      * @param port  The port of the server to clear rules for.
      */
     public void clearServerRules(int port) {
-        getServer(port).getServerRouter().rules.clear();
-    }
+        getServer(port).getServerRouter(); }//.rules.clear();
+
 
     /** Install a rule to a particular server.
      *
@@ -300,7 +293,7 @@ public abstract class AbstractViewTest extends AbstractCorfuTest {
      * @param rule  The rule to install.
      */
     public void addServerRule(int port, TestRule rule) {
-        getServer(port).getServerRouter().rules.add(rule);
+        getServer(port).getServerRouter(); //.rules.add(rule);
     }
 
     /** The configuration string used for the default runtime.
@@ -336,34 +329,37 @@ public abstract class AbstractViewTest extends AbstractCorfuTest {
      */
     @Data
     private static class TestServer {
-        ServerContext serverContext;
-        BaseServer baseServer;
-        SequencerServer sequencerServer;
-        LayoutServer layoutServer;
-        LogUnitServer logUnitServer;
-        ManagementServer managementServer;
-        IServerRouter serverRouter;
+        final ServerContext serverContext;
+        final BaseServer baseServer;
+        final SequencerServer sequencerServer;
+        final LayoutServer layoutServer;
+        final LogUnitServer logUnitServer;
+        final ManagementServer managementServer;
+        final TestServerRouter<CorfuMsg, CorfuMsgType> serverRouter;
         int port;
 
         TestServer(Map<String, Object> optsMap)
         {
-            this(new ServerContext(optsMap, new TestServerRouter()));
+            this(new ServerContext(optsMap));
         }
 
-        TestServer(ServerContext serverContext) {
+        TestServer(ServerContext serverContext)
+        {
             this.serverContext = serverContext;
-            this.serverRouter = serverContext.getServerRouter();
-            this.baseServer = new BaseServer();
-            this.sequencerServer = new SequencerServer(serverContext);
-            this.layoutServer = new LayoutServer(serverContext);
-            this.logUnitServer = new LogUnitServer(serverContext);
-            this.managementServer = new ManagementServer(serverContext);
+            this.port = port;
+            serverRouter = new TestServerRouter<CorfuMsg,CorfuMsgType>()
+                    .registerServer(BaseServer::new)
+                    .registerServer(r -> new LayoutServer(r, serverContext))
+                    .registerServer(r -> new SequencerServer(r, serverContext))
+                    .registerServer(r -> new LogUnitServer(r, serverContext))
+                    .registerServer(r -> new ManagementServer(r, serverContext))
+                    .start();
 
-            this.serverRouter.addServer(baseServer);
-            this.serverRouter.addServer(sequencerServer);
-            this.serverRouter.addServer(layoutServer);
-            this.serverRouter.addServer(logUnitServer);
-            this.serverRouter.addServer(managementServer);
+            this.baseServer = serverRouter.getServer(BaseServer.class);
+            this.sequencerServer = serverRouter.getServer(SequencerServer.class);
+            this.layoutServer = serverRouter.getServer(LayoutServer.class);
+            this.logUnitServer = serverRouter.getServer(LogUnitServer.class);
+            this.managementServer = serverRouter.getServer(ManagementServer.class);
         }
 
         TestServer(int port)

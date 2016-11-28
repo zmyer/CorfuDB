@@ -3,7 +3,6 @@ package org.corfudb.infrastructure;
 import org.assertj.core.api.Assertions;
 import org.corfudb.protocols.wireprotocol.CorfuMsg;
 import org.corfudb.protocols.wireprotocol.CorfuMsgType;
-import org.junit.Before;
 import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -11,31 +10,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Created by mwei on 12/14/15.
  */
-public class BaseServerTest extends AbstractServerTest {
+public class BaseServerTest extends AbstractServerTest<BaseServer> {
 
-    BaseServer bs;
-
-    @Override
-    public AbstractServer getDefaultServer() {
-        if (bs == null) {
-            bs = new BaseServer();
-        }
-        return bs;
+    public BaseServerTest() {
+        super(BaseServer::new);
     }
 
     @Test
     public void testPing() {
-        sendMessage(new CorfuMsg(CorfuMsgType.PING));
+        sendMessage(CorfuMsgType.PING.msg());
         Assertions.assertThat(getLastMessage().getMsgType())
-                .isEqualTo(CorfuMsgType.PONG);
+                .isEqualTo(CorfuMsgType.PONG_RESPONSE);
     }
 
     @Test
     public void shutdownServerDoesNotRespond() {
-        getDefaultServer().shutdown();
         Assertions.assertThat(getLastMessage())
                 .isNull();
-        sendMessage(new CorfuMsg(CorfuMsgType.PING));
+        sendMessage(CorfuMsgType.PING.msg());
         Assertions.assertThat(getLastMessage())
                 .isNull();
     }

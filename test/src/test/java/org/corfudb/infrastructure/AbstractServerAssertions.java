@@ -1,6 +1,7 @@
 package org.corfudb.infrastructure;
 
 import org.assertj.core.api.AbstractAssert;
+import org.corfudb.router.AbstractServer;
 
 /**
  * Created by mwei on 6/29/16.

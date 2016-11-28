@@ -3,6 +3,12 @@ package org.corfudb.runtime;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.corfudb.protocols.wireprotocol.CorfuMsg;
+import org.corfudb.protocols.wireprotocol.CorfuMsgType;
+import org.corfudb.protocols.wireprotocol.NettyCorfuMessageDecoder;
+import org.corfudb.protocols.wireprotocol.NettyCorfuMessageEncoder;
+import org.corfudb.router.IClientRouter;
+import org.corfudb.router.netty.NettyClientRouter;
 import org.corfudb.runtime.clients.*;
 import org.corfudb.runtime.view.AddressSpaceView;
 import org.corfudb.runtime.view.Layout;
@@ -63,7 +69,7 @@ public class CorfuRuntime {
     /**
      * A map of routers, representing nodes.
      */
-    public Map<String, IClientRouter> nodeRouters;
+    public Map<String, IClientRouter<CorfuMsg, CorfuMsgType>> nodeRouters;
     /**
      * A completable future containing a layout, when completed.
      */
@@ -98,7 +104,28 @@ public class CorfuRuntime {
      * When set, overrides the default getRouterFunction. Used by the testing
      * framework to ensure the default routers used are for testing.
      */
-    public static BiFunction<CorfuRuntime, String, IClientRouter> overrideGetRouterFunction = null;
+    public static BiFunction<CorfuRuntime, String, IClientRouter<CorfuMsg, CorfuMsgType>>
+            overrideGetRouterFunction = (runtime, address) -> {
+        // Parse the string in host:port format.
+        String host = address.split(":")[0];
+        Integer port = Integer.parseInt(address.split(":")[1]);
+        // Generate a new router, start it and add it to the table.
+        NettyClientRouter<CorfuMsg, CorfuMsgType> router =
+                NettyClientRouter.<CorfuMsg, CorfuMsgType>builder()
+                        .setHost(host)
+                        .setPort(port)
+                        .setDecoderSupplier(NettyCorfuMessageDecoder::new)
+                        .setEncoderSupplier(NettyCorfuMessageEncoder::new)
+                        .build()
+                        .registerRequestClient(LayoutClient::new)
+                        .registerRequestClient(ManagementClient::new)
+                        .registerRequestClient(r -> new SequencerClient(r, runtime))
+                        .registerRequestClient(r -> new LogUnitClient(r, runtime));
+
+        log.debug("Connecting to new router {}:{}", host, port);
+        router.start();
+        return router;
+    };
 
     /**
      * A function to handle getting routers. Used by test framework to inject
@@ -107,29 +134,15 @@ public class CorfuRuntime {
      */
     @Getter
     @Setter
-    public Function<String, IClientRouter> getRouterFunction = overrideGetRouterFunction != null ?
-            (address) -> overrideGetRouterFunction.apply(this, address) : (address) -> {
-
-        // Return an existing router if we already have one.
-        if (nodeRouters.containsKey(address)) {
-            return nodeRouters.get(address);
-        }
-        // Parse the string in host:port format.
-        String host = address.split(":")[0];
-        Integer port = Integer.parseInt(address.split(":")[1]);
-        // Generate a new router, start it and add it to the table.
-        NettyClientRouter router = new NettyClientRouter(host, port);
-        log.debug("Connecting to new router {}:{}", host, port);
-        try {
-            router.addClient(new LayoutClient())
-                    .addClient(new SequencerClient())
-                    .addClient(new LogUnitClient())
-                    .addClient(new ManagementClient())
-                    .start();
-            nodeRouters.put(address, router);
-        } catch (Exception e) {
-            log.warn("Error connecting to router", e);
-        }
+    public Function<String, IClientRouter<CorfuMsg,CorfuMsgType>> getRouterFunction
+            =
+            (address) -> {
+                // Return an existing router if we already have one.
+                if (nodeRouters.containsKey(address)) {
+                    return nodeRouters.get(address);
+                }
+        IClientRouter<CorfuMsg,CorfuMsgType> router = overrideGetRouterFunction.apply(this, address);
+        nodeRouters.put(address, router);
         return router;
     };
 
@@ -167,12 +180,7 @@ public class CorfuRuntime {
 
     public void stop(boolean shutdown_p) {
         for (IClientRouter r: nodeRouters.values()) {
-            r.stop(shutdown_p);
-        }
-        if (shutdown_p) {
-            // N.B. An icky side-effect of this clobbering is leaking
-            // Pthreads, namely the Netty client-side worker threads.
-            nodeRouters = new ConcurrentHashMap<>();
+            r.stop();
         }
     }
 
@@ -262,7 +270,7 @@ public class CorfuRuntime {
      * @param address The address of the router to get.
      * @return The router.
      */
-    public IClientRouter getRouter(String address) {
+    public IClientRouter<CorfuMsg, CorfuMsgType> getRouter(String address) {
         return getRouterFunction.apply(address);
     }
 
@@ -298,25 +306,15 @@ public class CorfuRuntime {
                 for (String s : layoutServersCopy) {
                     log.debug("Trying connection to layout server {}", s);
                     try {
-                        IClientRouter router = getRouter(s);
+                        IClientRouter<CorfuMsg, CorfuMsgType> router = getRouter(s);
                         // Try to get a layout.
                         CompletableFuture<Layout> layoutFuture = router.getClient(LayoutClient.class).getLayout();
                         // Wait for layout
                         Layout l = layoutFuture.get();
                         l.setRuntime(this);
-                        // this.layout should only be assigned to the new layout future once it has been
-                        // completely constructed and initialized. For example, assigning this.layout = l
-                        // before setting the layout's runtime can result in other threads trying to access a layout
-                        // with  a null runtime.
-                        //FIXME Synchronization START
-                        // We are updating multiple variables and we need the update to be synchronized across all variables.
-                        // Since the variable layoutServers is used only locally within the class it is acceptable
-                        // (at least the code on 10/13/2016 does not have issues)
-                        // but setEpoch of routers needs to be synchronized as those variables are not local.
-                        l.getAllServers().stream().map(getRouterFunction).forEach(x -> x.setEpoch(l.getEpoch()));
+
                         layoutServers = l.getLayoutServers();
                         layout = layoutFuture;
-                        //FIXME Synchronization END
 
                         log.debug("Layout server {} responded with layout {}", s, l);
                         return l;

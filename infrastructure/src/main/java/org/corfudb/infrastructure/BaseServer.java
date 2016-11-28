@@ -5,6 +5,10 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.corfudb.protocols.wireprotocol.*;
+import org.corfudb.router.AbstractServer;
+import org.corfudb.router.IChannel;
+import org.corfudb.router.IServerRouter;
+import org.corfudb.router.ServerMsgHandler;
 import org.corfudb.util.Utils;
 
 import java.lang.invoke.MethodHandles;
@@ -15,7 +19,7 @@ import java.util.Map;
  * Created by mwei on 12/8/15.
  */
 @Slf4j
-public class BaseServer extends AbstractServer {
+public class BaseServer extends AbstractServer<CorfuMsg, CorfuMsgType> {
 
     /** Options map, if available */
     @Getter
@@ -24,30 +28,34 @@ public class BaseServer extends AbstractServer {
 
     /** Handler for the base server */
     @Getter
-    private final CorfuMsgHandler handler = new CorfuMsgHandler()
-            .generateHandlers(MethodHandles.lookup(), this);
+    private final ServerMsgHandler<CorfuMsg, CorfuMsgType> msgHandler =
+            new ServerMsgHandler<>(this)
+            .generateHandlers(MethodHandles.lookup(), this, ServerHandler.class, ServerHandler::type);
+
+
+    public BaseServer(IServerRouter<CorfuMsg, CorfuMsgType> router) {
+        super(router);
+    }
 
     /** Respond to a ping message.
      *
      * @param msg   The incoming message
      * @param ctx   The channel context
-     * @param r     The server router.
      */
     @ServerHandler(type=CorfuMsgType.PING)
-    private static void ping(CorfuMsg msg, ChannelHandlerContext ctx, IServerRouter r) {
-        r.sendResponse(ctx, msg, CorfuMsgType.PONG.msg());
+    private static CorfuMsg ping(CorfuMsg msg, IChannel<CorfuMsg> ctx) {
+        return CorfuMsgType.PONG_RESPONSE.msg();
     }
 
     /** Respond to a version request message.
      *
      * @param msg   The incoming message
      * @param ctx   The channel context
-     * @param r     The server router.
      */
     @ServerHandler(type=CorfuMsgType.VERSION_REQUEST)
-    private void getVersion(CorfuMsg msg, ChannelHandlerContext ctx, IServerRouter r) {
+    private JSONPayloadMsg getVersion(CorfuMsg msg, IChannel<CorfuMsg> ctx) {
         VersionInfo vi = new VersionInfo(optionsMap);
-        r.sendResponse(ctx, msg, new JSONPayloadMsg<>(vi, CorfuMsgType.VERSION_RESPONSE));
+        return new JSONPayloadMsg<>(vi, CorfuMsgType.VERSION_RESPONSE);
     }
 
     /** Reset the JVM. This mechanism leverages that corfu_server runs in a bash script
@@ -56,19 +64,12 @@ public class BaseServer extends AbstractServer {
      *
      * @param msg   The incoming message
      * @param ctx   The channel context
-     * @param r     The server router.
      */
     @ServerHandler(type=CorfuMsgType.RESET)
-    private static void doReset(CorfuMsg msg, ChannelHandlerContext ctx, IServerRouter r) {
+    private void doReset(CorfuMsg msg, IChannel<CorfuMsg> ctx) {
         log.warn("Remote reset requested from client " + msg.getClientID());
-        r.sendResponse(ctx, msg, CorfuMsgType.ACK.msg());
+        sendResponse(ctx, msg, CorfuMsgType.ACK_RESPONSE.msg());
         Utils.sleepUninterruptibly(500); // Sleep, to make sure that all channels are flushed...
         System.exit(100);
     }
-
-    @Override
-    public void reset() { }
-
-    @Override
-    public void reboot() { }
 }

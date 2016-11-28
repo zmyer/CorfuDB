@@ -52,13 +52,14 @@ public class PeriodicPollPolicyTest extends AbstractViewTest {
         // Bootstrapping only the layout servers.
         // Failure-correction/updateLayout will cause test to give a non-deterministic output.
 
+        /*
         getLayoutServer(SERVERS.PORT_0).handleMessage(CorfuMsgType.LAYOUT_BOOTSTRAP.payloadMsg(new LayoutBootstrapRequest(layout)),
                 null, getServerRouter(SERVERS.PORT_0));
         getLayoutServer(SERVERS.PORT_1).handleMessage(CorfuMsgType.LAYOUT_BOOTSTRAP.payloadMsg(new LayoutBootstrapRequest(layout)),
                 null, getServerRouter(SERVERS.PORT_1));
         getLayoutServer(SERVERS.PORT_2).handleMessage(CorfuMsgType.LAYOUT_BOOTSTRAP.payloadMsg(new LayoutBootstrapRequest(layout)),
                 null, getServerRouter(SERVERS.PORT_2));
-
+*/
         corfuRuntime = new CorfuRuntime();
         layout.getLayoutServers().forEach(corfuRuntime::addLayoutServer);
         corfuRuntime.connect();
