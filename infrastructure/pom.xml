@@ -27,6 +27,20 @@
         <artifactId>router</artifactId>
         <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.corfudb</groupId>
+            <artifactId>router</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+            <type>test-jar</type>
+        </dependency>
+        <dependency>
+            <groupId>org.corfudb</groupId>
+            <artifactId>test-infrastructure</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
 
         <!-- External Dependencies-->
         <dependency>

@@ -7,7 +7,7 @@ import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
+/** Test the base server basic functionality.
  * Created by mwei on 12/14/15.
  */
 public class BaseServerTest extends AbstractServerTest<BaseServer> {
@@ -16,19 +16,14 @@ public class BaseServerTest extends AbstractServerTest<BaseServer> {
         super(BaseServer::new);
     }
 
+    /** Test that pinging the base server works.
+     * The server should respond to a PING with a PONG.
+     */
     @Test
     public void testPing() {
         sendMessage(CorfuMsgType.PING.msg());
-        Assertions.assertThat(getLastMessage().getMsgType())
+        assertThat(getLastMessage().getMsgType())
                 .isEqualTo(CorfuMsgType.PONG_RESPONSE);
     }
 
-    @Test
-    public void shutdownServerDoesNotRespond() {
-        Assertions.assertThat(getLastMessage())
-                .isNull();
-        sendMessage(CorfuMsgType.PING.msg());
-        Assertions.assertThat(getLastMessage())
-                .isNull();
-    }
 }
