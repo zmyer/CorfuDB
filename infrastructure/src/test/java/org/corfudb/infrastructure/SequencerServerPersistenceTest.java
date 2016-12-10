@@ -1,6 +1,15 @@
 package org.corfudb.infrastructure;
 
+import org.corfudb.protocols.wireprotocol.CorfuMsgType;
+import org.corfudb.protocols.wireprotocol.CorfuPayloadMsg;
+import org.corfudb.protocols.wireprotocol.TokenRequest;
+import org.corfudb.runtime.CorfuRuntime;
 import org.junit.Test;
+
+import java.util.Collections;
+
+import static org.corfudb.infrastructure.SequencerServerAssertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Created by mwei on 12/8/16.
@@ -21,44 +30,41 @@ public class SequencerServerPersistenceTest
     public ServerContext getServerContext() {
         return new ServerContextBuilder()
                 .setCheckpoint(1)
+                .setLogPath(getTempDir())
                 .build();
     }
 
     @Test
     public void checkSequencerCheckpointingWorks()
             throws Exception {
-        String serviceDir = getTempDir();
 
-        /*
-        SequencerServer s1 = new SequencerServer(new ServerContextBuilder()
-                .setLogPath(serviceDir)
-                .setMemory(false)
-                .setInitialToken(0)
-                .setCheckpoint(1)
-                .build());
 
-        this.router.reset();
-        this.router.addServer(s1);
         sendMessage(new CorfuPayloadMsg<>(CorfuMsgType.TOKEN_REQUEST,
-                new TokenRequest(1L, Collections.singleton(CorfuRuntime.getStreamID("a")), false, false)));
-        sendMessage(new CorfuPayloadMsg<>(CorfuMsgType.TOKEN_REQUEST,
-                new TokenRequest(1L, Collections.singleton(CorfuRuntime.getStreamID("a")), false, false)));
-        assertThat(s1)
-                .tokenIsAt(2);
-        Thread.sleep(1400);
-        s1.shutdown();
+                new TokenRequest(1L,
+                        Collections.singleton(CorfuRuntime.getStreamID("a")),
+                        false,
+                        false)));
 
-        SequencerServer s2 = new SequencerServer(new ServerContextBuilder()
-                .setLogPath(serviceDir)
-                .setMemory(false)
-                .setInitialToken(-1)
-                .setCheckpoint(1)
-                .build());
-        this.router.reset();
-        this.router.addServer(s2);
-        assertThat(s2)
+        sendMessage(new CorfuPayloadMsg<>(CorfuMsgType.TOKEN_REQUEST,
+                new TokenRequest(1L,
+                        Collections.singleton(CorfuRuntime.getStreamID("a")),
+                        false,
+                        false)));
+
+        final SequencerServer FIRST_SEQUENCER_INSTANCE = getServer();
+
+        assertThat(FIRST_SEQUENCER_INSTANCE)
                 .tokenIsAt(2);
-                */
+
+        resetTest();
+
+        final SequencerServer SECOND_SEQUENCER_INSTANCE = getServer();
+
+        assertThat(FIRST_SEQUENCER_INSTANCE)
+                .isNotEqualTo(SECOND_SEQUENCER_INSTANCE);
+
+        assertThat(SECOND_SEQUENCER_INSTANCE)
+                .tokenIsAt(2);
     }
 
 }

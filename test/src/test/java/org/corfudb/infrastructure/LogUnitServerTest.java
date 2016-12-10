@@ -1,10 +1,7 @@
 package org.corfudb.infrastructure;
 
-import com.github.benmanes.caffeine.cache.LoadingCache;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
-import org.assertj.core.api.Assertions;
-import org.corfudb.infrastructure.log.LogAddress;
 import org.corfudb.infrastructure.log.StreamLogFiles;
 import org.corfudb.protocols.wireprotocol.*;
 import org.corfudb.runtime.CorfuRuntime;
@@ -17,8 +14,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.Collections;
-import java.util.concurrent.atomic.AtomicLong;
-
 import static org.corfudb.infrastructure.LogUnitServerAssertions.assertThat;
 
 /**

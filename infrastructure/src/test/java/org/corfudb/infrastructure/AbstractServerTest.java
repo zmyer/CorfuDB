@@ -9,6 +9,7 @@ import org.corfudb.router.IChannel;
 import org.corfudb.router.IServer;
 import org.corfudb.router.IServerRouter;
 import org.corfudb.router.test.TestServerRouter;
+import org.junit.After;
 import org.junit.Before;
 
 import java.util.List;
@@ -83,11 +84,19 @@ public abstract class AbstractServerTest
     /** Reset this test. */
     @Before
     public void resetTest() {
+        if (router != null) {
+            router.stop();
+        }
         router = new TestServerRouter<>();
         testChannel = new SimpleTestChannel();
         server = serverFactory.apply(router);
         router.registerServer(server);
         router.start();
+    }
+
+    @After
+    public void cleanupTests() {
+        router.stop();
     }
 
     /** A simple test channel which records all messages the server
