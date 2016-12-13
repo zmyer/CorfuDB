@@ -23,7 +23,7 @@ public enum CorfuMsgType implements IRespondableMsgType<CorfuMsg> {
     PING(0, TypeToken.of(CorfuMsg.class), true),
     PONG_RESPONSE(1, TypeToken.of(CorfuMsg.class), true),
     RESET(2, TypeToken.of(CorfuMsg.class), true),
-    SET_EPOCH(3, new TypeToken<CorfuPayloadMsg<Long>>() {}, true),
+    SEAL_EPOCH(3, new TypeToken<CorfuPayloadMsg<Long>>() {}, true),
     ACK_RESPONSE(4, TypeToken.of(CorfuMsg.class), true),
     WRONG_EPOCH_ERROR(5, new TypeToken<CorfuPayloadMsg<Long>>() {},  true),
     NACK_ERROR(6, TypeToken.of(CorfuMsg.class)),

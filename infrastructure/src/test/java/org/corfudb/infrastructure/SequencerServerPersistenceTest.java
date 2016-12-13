@@ -30,7 +30,8 @@ public class SequencerServerPersistenceTest
     public ServerContext getServerContext() {
         return new ServerContextBuilder()
                 .setCheckpoint(1)
-                .setLogPath(getTempDir())
+                .setMemory(false)
+                .setLogPath(PARAMETERS.TEST_TEMP_DIR)
                 .build();
     }
 
@@ -41,13 +42,15 @@ public class SequencerServerPersistenceTest
 
         sendMessage(new CorfuPayloadMsg<>(CorfuMsgType.TOKEN_REQUEST,
                 new TokenRequest(1L,
-                        Collections.singleton(CorfuRuntime.getStreamID("a")),
+                        Collections.singleton(CorfuRuntime
+                                                .getStreamID("a")),
                         false,
                         false)));
 
         sendMessage(new CorfuPayloadMsg<>(CorfuMsgType.TOKEN_REQUEST,
                 new TokenRequest(1L,
-                        Collections.singleton(CorfuRuntime.getStreamID("a")),
+                        Collections.singleton(CorfuRuntime
+                                                .getStreamID("a")),
                         false,
                         false)));
 
@@ -55,6 +58,10 @@ public class SequencerServerPersistenceTest
 
         assertThat(FIRST_SEQUENCER_INSTANCE)
                 .tokenIsAt(2);
+
+        // TODO: Have a command to send to the sequencer to force
+        // checkpointing.
+        Thread.sleep(PARAMETERS.TIMEOUT_NORMAL.toMillis());
 
         resetTest();
 

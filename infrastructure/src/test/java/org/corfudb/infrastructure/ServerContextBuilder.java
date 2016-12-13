@@ -13,7 +13,7 @@ import lombok.experimental.Accessors;
 @SuppressWarnings("checkstyle:magicnumber")
 public class ServerContextBuilder {
 
-    long initialToken = 0;
+    long initialToken = -1L;
     boolean single = true;
     boolean memory = true;
     String logPath = null;

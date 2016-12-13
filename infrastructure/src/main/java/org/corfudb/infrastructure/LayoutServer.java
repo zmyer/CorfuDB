@@ -211,15 +211,16 @@ public class LayoutServer extends AbstractPreconditionServer<CorfuMsg, CorfuMsgT
      * @param ctx       The channel context
      * @param r         The server router.
      */
-    @ServerHandler(type=CorfuMsgType.SET_EPOCH)
-    public synchronized CorfuMsg handleMessageSetEpoch(CorfuPayloadMsg<Long> msg, IChannel<CorfuMsg> channel) {
+    @ServerHandler(type=CorfuMsgType.SEAL_EPOCH)
+    public synchronized CorfuMsg handleMessageSealEpoch(CorfuPayloadMsg<Long> msg,
+                                                        IChannel<CorfuMsg> channel) {
         long serverEpoch = getServerEpoch();
         if (msg.getPayload() >= serverEpoch) {
-            log.info("Received SET_EPOCH, moving to new epoch {}", msg.getPayload());
+            log.info("Received SEAL_EPOCH, moving to new epoch {}", msg.getPayload());
             setServerEpoch(msg.getPayload());
             return CorfuMsgType.ACK_RESPONSE.msg();
         } else {
-            log.debug("Rejected SET_EPOCH currrent={}, requested={}", serverEpoch, msg.getPayload());
+            log.debug("Rejected SEAL_EPOCH currrent={}, requested={}", serverEpoch, msg.getPayload());
             return CorfuMsgType.WRONG_EPOCH_ERROR.msg();
         }
     }
@@ -306,7 +307,7 @@ public class LayoutServer extends AbstractPreconditionServer<CorfuMsg, CorfuMsgT
      * @param ctx
      * @param r
      */
-    // TODO If a server does not get SET_EPOCH layout commit message cannot reach it
+    // TODO If a server does not get SEAL_EPOCH layout commit message cannot reach it
     // TODO as this message is not set to ignore EPOCH.
     // TODO How do we handle holes in history if let in layout commit message. Maybe we have a hole filling process
     // TODO how do reject the older epoch commits, should it be an explicit NACK_ERROR.

@@ -140,4 +140,16 @@ public class CorfuMsg implements IRoutableMsg<CorfuMsgType>, IRespondableMsg {
             buf.release();
         }
     }
+
+    /**
+     * Copy fields from this request message to the response for this
+     * message.
+     *
+     * @param outMsg The response message to copy fields to.
+     */
+    @Override
+    public void copyFieldsToResponse(IRespondableMsg outMsg) {
+        outMsg.setRequestID(requestID);
+        ((CorfuMsg)outMsg).epoch = epoch;
+    }
 }
