@@ -1,78 +1,62 @@
 package org.corfudb.runtime.clients;
 
-import org.corfudb.AbstractCorfuTest;
+import lombok.Getter;
+import org.corfudb.infrastructure.AbstractServerTest;
 import org.corfudb.infrastructure.ServerContext;
 import org.corfudb.infrastructure.ServerContextBuilder;
+import org.corfudb.protocols.wireprotocol.CorfuMsg;
+import org.corfudb.protocols.wireprotocol.CorfuMsgType;
+import org.corfudb.router.IClient;
+import org.corfudb.router.IRequestClientRouter;
+import org.corfudb.router.IServer;
+import org.corfudb.router.IServerRouter;
+import org.corfudb.router.test.TestClientRouter;
 import org.junit.Before;
+
+import java.util.function.Function;
 
 /**
  * Created by mwei on 12/13/15.
  */
-public abstract class AbstractClientTest extends AbstractCorfuTest {
+public abstract class AbstractClientTest
+        <C extends IClient<CorfuMsg, CorfuMsgType>,
+         S extends IServer<CorfuMsg,CorfuMsgType>>
+        extends AbstractServerTest<S> {
+
+    /** The test client router. */
+    private TestClientRouter<CorfuMsg, CorfuMsgType> clientRouter;
+
+    /** The current client for this test. */
+    @Getter
+    private C client;
+
+    /** A function which generates clients from routers. */
+    private final Function<IRequestClientRouter<CorfuMsg, CorfuMsgType>, C>
+                                                                clientGenerator;
 
     /**
      * Initialize the AbstractClientTest.
      */
-    public AbstractClientTest() {
-        // Force all new CorfuRuntimes to override the getRouterFn
-       // CorfuRuntime.overrideGetRouterFunction = this::getRouterFunction;
+    public AbstractClientTest(
+        Function<IRequestClientRouter<CorfuMsg, CorfuMsgType>, C> clientFactory,
+        Function<IServerRouter<CorfuMsg, CorfuMsgType>, S> serverFactory) {
+        super(serverFactory);
+        clientGenerator = clientFactory;
     }
 
-   // @Getter
-   // TestClientRouter router;
-
-  //  @Getter
-   // TestServerRouter serverRouter;
-
+    /** Reset the client and the server. */
     @Before
+    @Override
     public void resetTest() {
-//        serverRouter = new TestServerRouter();
- //       router = new TestClientRouter(serverRouter);
- //       getServersForTest().stream().forEach(serverRouter::addServer);
- //       getClientsForTest().stream().forEach(router::addClient);
-    }
-
-    /**
-     * A map of maps to endpoint->routers, mapped for each runtime instance captured
-     */
- //   final Map<CorfuRuntime, Map<String, TestClientRouter>>
-//            runtimeRouterMap = new ConcurrentHashMap<>();
-
-    /**
-     * Function for obtaining a router, given a runtime and an endpoint.
-     *]
-     * @return
-     */
- //   private IClientRouter getRouterFunction(CorfuRuntime runtime, String endpoint) {
- //       runtimeRouterMap.putIfAbsent(runtime, new ConcurrentHashMap<>());
- //       if (!endpoint.startsWith("test:")) {
- //           throw new RuntimeException("Unsupported endpoint in test: " + endpoint);
- //       }
- //       return runtimeRouterMap.get(runtime).computeIfAbsent(endpoint,
- //               x -> {
- //                   TestClientRouter tcn =
- //                           new TestClientRouter(serverRouter);
- //                   tcn.addClient(new BaseClient())
- //                           .addClient(new SequencerClient())
- //                           .addClient(new LayoutClient())
- //                           .addClient(new LogUnitClient())
- //                           .addClient(new ManagementClient());
- //                   return tcn;
- //               }
- //       );
- //   }
-
- //   abstract Set<AbstractServer> getServersForTest();
-
-  //  abstract Set<IClient> getClientsForTest();
-
-    public ServerContext defaultServerContext() {
-        final int MAX_CACHE = 256_000_000;
-        return new ServerContextBuilder()
-                .setInitialToken(0)
-                .setMemory(true)
-                .setSingle(false)
-                .setMaxCache(MAX_CACHE)
+        if (clientRouter != null) {
+            clientRouter.stop();
+        }
+        super.resetTest();
+        clientRouter = TestClientRouter.<CorfuMsg, CorfuMsgType>builder()
+                .setAutomaticallyReconnect(true)
+                .setDefaultTimeout(PARAMETERS.TIMEOUT_NORMAL)
+                .setEndpoint(router)
                 .build();
+        client = clientGenerator.apply(clientRouter);
     }
 }

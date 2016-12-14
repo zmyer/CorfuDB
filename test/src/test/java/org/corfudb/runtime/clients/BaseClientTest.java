@@ -7,29 +7,24 @@ import org.junit.Test;
 
 import java.util.Set;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 /**
  * Created by mwei on 7/27/16.
  */
-public class BaseClientTest extends AbstractClientTest {
+public class BaseClientTest
+        extends AbstractClientTest<BaseClient, BaseServer> {
 
-    BaseClient client;
-
-    /*
-    @Override
-    Set<AbstractServer> getServersForTest() {
-        return new ImmutableSet.Builder<AbstractServer>()
-                .add(new BaseServer())
-                .build();
+    BaseClientTest() {
+        super(BaseClient::new, BaseServer::new);
     }
 
-    @Override
-    Set<IClient> getClientsForTest() {
-        client = new BaseClient();
-        return new ImmutableSet.Builder<IClient>()
-                .add(client)
-                .build();
+    @Test
+    public void canPing() {
+        assertThat(getClient().pingSync())
+                .isTrue();
     }
-    */
+
     @Test
     public void canGetVersionInfo() {
         CFUtils.getUninterruptibly(client.getVersionInfo());

@@ -36,7 +36,7 @@ public abstract class AbstractServerTest
 
     /** A test server router which will be used to route messages
      * to the server. */
-    private TestServerRouter<CorfuMsg, CorfuMsgType> router;
+    protected TestServerRouter<CorfuMsg, CorfuMsgType> router;
 
     /** The function used to generate new servers.
      */
