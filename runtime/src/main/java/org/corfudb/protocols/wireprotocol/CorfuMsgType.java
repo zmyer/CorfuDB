@@ -5,6 +5,11 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.corfudb.router.IRespondableMsgType;
+import org.corfudb.runtime.exceptions.AlreadyBootstrappedException;
+import org.corfudb.runtime.exceptions.DataCorruptionException;
+import org.corfudb.runtime.exceptions.NoBootstrapException;
+import org.corfudb.runtime.exceptions.OutOfSpaceException;
+import org.corfudb.runtime.exceptions.OutrankedException;
 import org.corfudb.runtime.exceptions.OverwriteException;
 import org.corfudb.runtime.view.Layout;
 import java.lang.invoke.LambdaMetafactory;
@@ -33,13 +38,17 @@ public enum CorfuMsgType implements IRespondableMsgType<CorfuMsg> {
     LAYOUT_REQUEST(10, new TypeToken<CorfuPayloadMsg<Long>>(){}),
     LAYOUT_RESPONSE(11, TypeToken.of(LayoutMsg.class)),
     LAYOUT_PREPARE(12, new TypeToken<CorfuPayloadMsg<LayoutPrepareRequest>>(){}),
-    LAYOUT_PREPARE_REJECT_ERROR(13, new TypeToken<CorfuPayloadMsg<LayoutPrepareResponse>>(){}),
+    LAYOUT_PREPARE_REJECT_ERROR(13, new TypeToken<CorfuPayloadMsg<LayoutPrepareResponse>>(){},
+            x ->
+                    new OutrankedException(((CorfuPayloadMsg<LayoutProposeResponse>)x).getPayload().getRank())),
     LAYOUT_PROPOSE(14, new TypeToken<CorfuPayloadMsg<LayoutProposeRequest>>(){}),
-    LAYOUT_PROPOSE_REJECT_ERROR(15, new TypeToken<CorfuPayloadMsg<LayoutProposeResponse>>(){}),
+    LAYOUT_PROPOSE_REJECT_ERROR(15, new TypeToken<CorfuPayloadMsg<LayoutProposeResponse>>(){},
+            x ->
+                    new OutrankedException(((CorfuPayloadMsg<LayoutProposeResponse>)x).getPayload().getRank())),
     LAYOUT_COMMITTED(16, new TypeToken<CorfuPayloadMsg<LayoutCommittedRequest>>(){}),
     LAYOUT_QUERY(17, new TypeToken<CorfuPayloadMsg<Long>>(){}),
     LAYOUT_BOOTSTRAP(18, new TypeToken<CorfuPayloadMsg<LayoutBootstrapRequest>>(){}),
-    LAYOUT_NOBOOTSTRAP_ERROR(19, TypeToken.of(CorfuMsg.class)),
+    LAYOUT_NOBOOTSTRAP_ERROR(19, TypeToken.of(CorfuMsg.class), x -> new NoBootstrapException()),
 
     // Sequencer Messages
     TOKEN_REQUEST(20, new TypeToken<CorfuPayloadMsg<TokenRequest>>(){}),
@@ -57,23 +66,27 @@ public enum CorfuMsgType implements IRespondableMsgType<CorfuMsg> {
     COMMIT(40, new TypeToken<CorfuPayloadMsg<CommitRequest>>() {}),
 
     WRITE_OK_RESPONSE(50, TypeToken.of(CorfuMsg.class)),
-    TRIMMED_ERROR(51, TypeToken.of(CorfuMsg.class)),
+    TRIMMED_ERROR(51, TypeToken.of(CorfuMsg.class), x -> new OverwriteException()),
     OVERWRITE_ERROR(52, TypeToken.of(CorfuMsg.class), x-> new OverwriteException()),
-    OOS_ERROR(53, TypeToken.of(CorfuMsg.class)),
-    RANK_ERROR(54, TypeToken.of(CorfuMsg.class)),
+    OOS_ERROR(53, TypeToken.of(CorfuMsg.class), x -> new OutOfSpaceException()),
+    RANK_ERROR(54, TypeToken.of(CorfuMsg.class), x -> new OutrankedException(0L)),
     NOENTRY_ERROR(55, TypeToken.of(CorfuMsg.class)),
-    REPLEX_OVERWRITE_ERROR(56, TypeToken.of(CorfuMsg.class)),
-    DATA_CORRUPTION_ERROR(57, new TypeToken<CorfuPayloadMsg<ReadResponse>>() {}),
+    REPLEX_OVERWRITE_ERROR(56, TypeToken.of(CorfuMsg.class), x -> new OverwriteException()),
+    DATA_CORRUPTION_ERROR(57, new TypeToken<CorfuPayloadMsg<ReadResponse>>() {},
+        x -> new DataCorruptionException()),
 
     // EXTRA CODES
-    LAYOUT_ALREADY_BOOTSTRAP_ERROR(60, TypeToken.of(CorfuMsg.class)),
+    LAYOUT_ALREADY_BOOTSTRAP_ERROR(60, TypeToken.of(CorfuMsg.class), x ->
+            new AlreadyBootstrappedException()),
     LAYOUT_PREPARE_ACK_RESPONSE(61, new TypeToken<CorfuPayloadMsg<LayoutPrepareResponse>>(){}),
 
     // Management Codes
     MANAGEMENT_BOOTSTRAP(62, new TypeToken<CorfuPayloadMsg<Layout>>(){}),
     MANAGEMENT_FAILURE_DETECTED(63, new TypeToken<CorfuPayloadMsg<FailureDetectorMsg>>(){}),
-    MANAGEMENT_NOBOOTSTRAP(64, TypeToken.of(CorfuMsg.class)),
-    MANAGEMENT_ALREADY_BOOTSTRAP(65, TypeToken.of(CorfuMsg.class));
+    MANAGEMENT_NOBOOTSTRAP_ERROR(64, TypeToken.of(CorfuMsg.class), x ->
+            new NoBootstrapException()),
+    MANAGEMENT_ALREADY_BOOTSTRAP_ERROR(65, TypeToken.of(CorfuMsg.class), x ->
+        new AlreadyBootstrappedException());
 
     public final int type;
     public final TypeToken<? extends CorfuMsg> messageType;

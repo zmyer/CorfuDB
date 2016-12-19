@@ -193,7 +193,7 @@ public class ManagementServer extends AbstractServer<CorfuMsg, CorfuMsgType> {
     boolean checkBootstrap(CorfuMsg msg, IChannel<CorfuMsg> ctx, IServerRouter r) {
         if (latestLayout == null) {
             log.warn("Received message but not bootstrapped! Message={}", msg);
-            r.sendResponse(ctx, msg, new CorfuMsg(CorfuMsgType.MANAGEMENT_NOBOOTSTRAP));
+            r.sendResponse(ctx, msg, new CorfuMsg(CorfuMsgType.MANAGEMENT_NOBOOTSTRAP_ERROR));
             return false;
         }
         return true;

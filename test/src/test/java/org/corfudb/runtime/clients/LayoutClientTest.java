@@ -1,15 +1,14 @@
 package org.corfudb.runtime.clients;
 
-import com.google.common.collect.ImmutableSet;
 import org.corfudb.infrastructure.LayoutServer;
+import org.corfudb.infrastructure.ServerContext;
+import org.corfudb.infrastructure.ServerContextBuilder;
 import org.corfudb.infrastructure.TestLayoutBuilder;
 import org.corfudb.runtime.exceptions.AlreadyBootstrappedException;
 import org.corfudb.runtime.exceptions.NoBootstrapException;
 import org.corfudb.runtime.exceptions.OutrankedException;
 import org.corfudb.runtime.view.Layout;
 import org.junit.Test;
-
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -24,23 +23,18 @@ public class LayoutClientTest extends AbstractClientTest<LayoutClient,
         super(LayoutClient::new, LayoutServer::new);
     }
 
-    /*
+    /** For these tests, we want a server which has not been
+     * bootstrapped.
+     * @return  A server context without bootstrap (non-single).
+     */
     @Override
-    Set<AbstractServer> getServersForTest() {
-        return new ImmutableSet.Builder<AbstractServer>()
-                .add(new LayoutServer(defaultServerContext()))
+    public ServerContext getServerContext() {
+        return new ServerContextBuilder()
+                .setSingle(false)
+                .setLogPath(PARAMETERS.TEST_TEMP_DIR)
                 .build();
     }
 
-    @Override
-    Set<IClient> getClientsForTest() {
-        client = new LayoutClient();
-        return new ImmutableSet.Builder<IClient>()
-                .add(new BaseClient())
-                .add(client)
-                .build();
-    }
-*/
     @Test
     public void nonBootstrappedServerThrowsException() {
         assertThatThrownBy(() -> {
