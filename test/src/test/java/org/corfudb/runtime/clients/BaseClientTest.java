@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class BaseClientTest
         extends AbstractClientTest<BaseClient, BaseServer> {
 
-    BaseClientTest() {
+    public BaseClientTest() {
         super(BaseClient::new, BaseServer::new);
     }
 
@@ -27,6 +27,6 @@ public class BaseClientTest
 
     @Test
     public void canGetVersionInfo() {
-        CFUtils.getUninterruptibly(client.getVersionInfo());
+        CFUtils.getUninterruptibly(getClient().getVersionInfo());
     }
 }

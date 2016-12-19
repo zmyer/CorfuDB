@@ -164,16 +164,11 @@ public class LogUnitPersistenceTest extends AbstractServerTest<LogUnitServer> {
 
     @Test (expected = RuntimeException.class)
     public void testInvalidLogVersion() throws Exception {
-        // Create a log file with an invalid version
-        String tempDir = PARAMETERS.TEST_TEMP_DIR;
-        createLogFile(tempDir, StreamLogFiles.VERSION + 1, false);
+        createLogFile(PARAMETERS.TEST_TEMP_DIR,
+                StreamLogFiles.VERSION + 1, false);
 
         // Start a new logging version
-        ServerContextBuilder builder = new ServerContextBuilder();
-        builder.setMemory(false);
-        builder.setLogPath(tempDir);
-        ServerContext context = builder.build();
-        // LogUnitServer logunit = new LogUnitServer(context);
+        resetTest();
     }
 
     @Test (expected = RuntimeException.class)
@@ -189,7 +184,6 @@ public class LogUnitPersistenceTest extends AbstractServerTest<LogUnitServer> {
         builder.setMemory(false);
         builder.setLogPath(tempDir);
         builder.setNoVerify(!noVerify);
-        ServerContext context = builder.build();
-        //   LogUnitServer logunit = new LogUnitServer(context);
+        resetTest(builder.build());
     }
 }

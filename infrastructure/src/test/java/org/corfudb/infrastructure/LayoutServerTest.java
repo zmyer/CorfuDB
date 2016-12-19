@@ -161,7 +161,8 @@ public class LayoutServerTest extends AbstractServerTest<LayoutServer> {
 
         requestLayout(epoch);
         assertThat(getLastMessage().getMsgType()).isEqualTo(CorfuMsgType.LAYOUT_RESPONSE);
-        assertThat(getLastMessage().getEpoch()).isEqualTo(2);
+        // NOTE: with the new router, the epoch in the response has no meaning.
+        //assertThat(getLastMessage().getEpoch()).isEqualTo(2);
 
         setEpoch(1);
         assertThat(getLastMessage().getMsgType()).isEqualTo(CorfuMsgType.WRONG_EPOCH_ERROR);

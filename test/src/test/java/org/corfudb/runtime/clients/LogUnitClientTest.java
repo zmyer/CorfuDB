@@ -27,20 +27,19 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * Created by mwei on 12/14/15.
  */
-public class LogUnitClientTest extends AbstractClientTest {
+public class LogUnitClientTest extends
+        AbstractClientTest<LogUnitClient, LogUnitServer> {
 
-    LogUnitClient client;
-    ServerContext serverContext;
-    String dirPath;
-    LogUnitServer server;
-
+    public LogUnitClientTest() {
+        super(LogUnitClient::new, LogUnitServer::new);
+    }
 
     @Test
     public void canReadWrite()
             throws Exception {
         byte[] testString = "hello world".getBytes();
-        client.write(0, Collections.<UUID>emptySet(), 0, testString, Collections.emptyMap()).get();
-        LogData r = client.read(0).get().getReadSet().get(0L);
+        getClient().write(0, Collections.<UUID>emptySet(), 0, testString, Collections.emptyMap()).get();
+        LogData r = getClient().read(0).get().getReadSet().get(0L);
         assertThat(r.getType())
                 .isEqualTo(DataType.DATA);
         assertThat(r.getPayload(new CorfuRuntime()))
@@ -51,8 +50,9 @@ public class LogUnitClientTest extends AbstractClientTest {
     public void overwriteThrowsException()
             throws Exception {
         byte[] testString = "hello world".getBytes();
-        client.write(0, Collections.<UUID>emptySet(), 0, testString, Collections.emptyMap()).get();
-        assertThatThrownBy(() -> client.write(0, Collections.<UUID>emptySet(), 0,
+        getClient().write(0, Collections.<UUID>emptySet(), 0, testString, Collections.emptyMap()).get();
+        assertThatThrownBy(() -> getClient()
+                .write(0, Collections.<UUID>emptySet(), 0,
                 testString, Collections.emptyMap()).get())
                 .isInstanceOf(ExecutionException.class)
                 .hasCauseInstanceOf(OverwriteException.class);
@@ -62,12 +62,14 @@ public class LogUnitClientTest extends AbstractClientTest {
     public void holeFillCannotBeOverwritten()
             throws Exception {
         byte[] testString = "hello world".getBytes();
-        client.fillHole(0).get();
-        LogData r = client.read(0).get().getReadSet().get(0L);
+        getClient().fillHole(0).get();
+        LogData r = getClient().read(0).get().getReadSet().get(0L);
         assertThat(r.getType())
                 .isEqualTo(DataType.HOLE);
 
-        assertThatThrownBy(() -> client.write(0, Collections.<UUID>emptySet(), 0, testString, Collections.emptyMap()).get())
+        assertThatThrownBy(() -> getClient()
+                .write(0, Collections.<UUID>emptySet(),
+                        0, testString, Collections.emptyMap()).get())
                 .isInstanceOf(ExecutionException.class)
                 .hasCauseInstanceOf(OverwriteException.class);
     }
@@ -76,13 +78,16 @@ public class LogUnitClientTest extends AbstractClientTest {
     public void holeFillCannotOverwrite()
             throws Exception {
         byte[] testString = "hello world".getBytes();
-        client.write(0, Collections.<UUID>emptySet(), 0, testString, Collections.emptyMap()).get();
+        getClient().write(0, Collections.<UUID>emptySet(),
+                0, testString, Collections.emptyMap()).get();
 
-        LogData r = client.read(0).get().getReadSet().get(0L);
+        LogData r = getClient()
+                .read(0).get().getReadSet().get(0L);
         assertThat(r.getType())
                 .isEqualTo(DataType.DATA);
 
-        assertThatThrownBy(() -> client.fillHole(0).get())
+        assertThatThrownBy(() -> getClient()
+                .fillHole(0).get())
                 .isInstanceOf(ExecutionException.class)
                 .hasCauseInstanceOf(OverwriteException.class);
     }
@@ -94,13 +99,14 @@ public class LogUnitClientTest extends AbstractClientTest {
         final long ADDRESS_1 = 1338L;
 
         byte[] testString = "hello world".getBytes();
-        client.write(0, Collections.<UUID>emptySet(), 0, testString,
+        getClient().write(0, Collections.<UUID>emptySet(), 0, testString,
                 ImmutableMap.<UUID, Long>builder()
                         .put(CorfuRuntime.getStreamID("hello"), ADDRESS_0)
                         .put(CorfuRuntime.getStreamID("hello2"), ADDRESS_1)
                         .build()).get();
 
-        LogData r = client.read(0).get().getReadSet().get(0L);
+        LogData r = getClient()
+                .read(0).get().getReadSet().get(0L);
         assertThat(r.getBackpointerMap())
                 .containsEntry(CorfuRuntime.getStreamID("hello"), ADDRESS_0);
         assertThat(r.getBackpointerMap())
@@ -111,9 +117,9 @@ public class LogUnitClientTest extends AbstractClientTest {
     public void canCommitWrite()
             throws Exception {
         byte[] testString = "hello world".getBytes();
-        client.write(0, Collections.<UUID>emptySet(), 0, testString, Collections.emptyMap()).get();
-        client.writeCommit(null, 0, true).get();
-        LogData r = client.read(0).get().getReadSet().get(0L);
+        getClient().write(0, Collections.<UUID>emptySet(), 0, testString, Collections.emptyMap()).get();
+        getClient().writeCommit(null, 0, true).get();
+        LogData r = getClient().read(0).get().getReadSet().get(0L);
         assertThat(r.getType())
                 .isEqualTo(DataType.DATA);
         assertThat(r.getPayload(new CorfuRuntime()))
@@ -122,10 +128,10 @@ public class LogUnitClientTest extends AbstractClientTest {
 
         final long OUTSIDE_ADDRESS = 10L;
         UUID streamA = CorfuRuntime.getStreamID("streamA");
-        client.writeStream(1, Collections.singletonMap(streamA, 0L), testString).get();
-        client.writeCommit(Collections.singletonMap(streamA, 0L), OUTSIDE_ADDRESS, true).get(); // 10L shouldn't matter
+        getClient().writeStream(1, Collections.singletonMap(streamA, 0L), testString).get();
+        getClient().writeCommit(Collections.singletonMap(streamA, 0L), OUTSIDE_ADDRESS, true).get(); // 10L shouldn't matter
 
-        r = client.read(streamA, Range.singleton(0L)).get().getReadSet().get(0L);
+        r = getClient().read(streamA, Range.singleton(0L)).get().getReadSet().get(0L);
         assertThat(r.getType())
                 .isEqualTo(DataType.DATA);
         assertThat(r.getPayload(new CorfuRuntime()))
@@ -135,19 +141,26 @@ public class LogUnitClientTest extends AbstractClientTest {
 
     @Test
     public void CorruptedDataReadThrowsException() throws Exception {
+        // Force the log unit to start with persistence.
+        resetServer(new ServerContextBuilder()
+                .setMemory(false)
+                .setLogPath(PARAMETERS.TEST_TEMP_DIR)
+                .build());
+
         byte[] testString = "hello world".getBytes();
-        client.write(0, Collections.<UUID>emptySet(), 0, testString, Collections.emptyMap()).get();
-        LogData r = client.read(0).get().getReadSet().get(0L);
+        getClient().write(0, Collections.<UUID>emptySet(), 0,
+                testString, Collections.emptyMap()).get();
+        LogData r = getClient().read(0).get().getReadSet().get(0L);
         // Verify that the data has been written correctly
         assertThat(r.getPayload(null)).isEqualTo(testString);
 
         // In order to clear the logunit's cache, the server is restarted so that
         // the next read is forced to be retrieved from file and not the cache
-        server.reboot();
+        resetServer();
 
         // Corrupt the written log entry
-        String logDir = (String) serverContext.getServerConfig().get("--log-path");
-        String logFilePath = logDir + File.separator + "log/0.log";
+        String logFilePath = PARAMETERS.TEST_TEMP_DIR + File.separator +
+                                                                "log/0.log";
         RandomAccessFile file = new RandomAccessFile(logFilePath, "rw");
         final long FILE_HEADER = 64;
         final int CORRUPT_BYTES = 0xFFFF;
@@ -156,7 +169,7 @@ public class LogUnitClientTest extends AbstractClientTest {
         file.close();
 
         // Try to read a corrupted log entry
-        assertThatThrownBy(() -> client.read(0).get())
+        assertThatThrownBy(() -> getClient().read(0).get())
                 .isInstanceOf(RuntimeException.class)
                 .hasCauseInstanceOf(DataCorruptionException.class);
     }

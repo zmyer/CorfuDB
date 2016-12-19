@@ -11,8 +11,10 @@ import org.corfudb.router.IRequestClientRouter;
 import org.corfudb.router.IServer;
 import org.corfudb.router.IServerRouter;
 import org.corfudb.router.test.TestClientRouter;
+import org.corfudb.runtime.CorfuRuntime;
 import org.junit.Before;
 
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 /**
@@ -30,33 +32,71 @@ public abstract class AbstractClientTest
     @Getter
     private C client;
 
-    /** A function which generates clients from routers. */
-    private final Function<IRequestClientRouter<CorfuMsg, CorfuMsgType>, C>
-                                                                clientGenerator;
+    /** A function which generates clients from routers and runtimes. */
+    private final BiFunction<IRequestClientRouter<CorfuMsg, CorfuMsgType>,
+                             CorfuRuntime, C> clientGenerator;
 
     /**
      * Initialize the AbstractClientTest.
      */
     public AbstractClientTest(
-        Function<IRequestClientRouter<CorfuMsg, CorfuMsgType>, C> clientFactory,
-        Function<IServerRouter<CorfuMsg, CorfuMsgType>, S> serverFactory) {
+        BiFunction<IRequestClientRouter<CorfuMsg, CorfuMsgType>,
+                CorfuRuntime, C> clientFactory,
+        BiFunction<IServerRouter<CorfuMsg, CorfuMsgType>, ServerContext,
+                S> serverFactory) {
         super(serverFactory);
         clientGenerator = clientFactory;
+    }
+
+    /**
+     * Initialize the AbstractClientTest.
+     */
+    public AbstractClientTest(
+            Function<IRequestClientRouter<CorfuMsg, CorfuMsgType>,
+                     C> clientFactory,
+            BiFunction<IServerRouter<CorfuMsg, CorfuMsgType>, ServerContext,
+                    S> serverFactory) {
+        super(serverFactory);
+        clientGenerator = (r, rt) -> clientFactory.apply(r);
+    }
+
+    /**
+     * Initialize the AbstractClientTest.
+     */
+    public AbstractClientTest(
+            Function<IRequestClientRouter<CorfuMsg, CorfuMsgType>,
+                    C> clientFactory,
+            Function<IServerRouter<CorfuMsg, CorfuMsgType>, S> serverFactory) {
+        super(serverFactory);
+        clientGenerator = (r, rt) -> clientFactory.apply(r);
     }
 
     /** Reset the client and the server. */
     @Before
     @Override
     public void resetTest() {
+        resetTest(getServerContext());
+    }
+
+    @Override
+    public void resetTest(ServerContext context) {
         if (clientRouter != null) {
             clientRouter.stop();
         }
-        super.resetTest();
+        super.resetTest(context);
         clientRouter = TestClientRouter.<CorfuMsg, CorfuMsgType>builder()
                 .setAutomaticallyReconnect(true)
                 .setDefaultTimeout(PARAMETERS.TIMEOUT_NORMAL)
                 .setEndpoint(router)
                 .build();
-        client = clientGenerator.apply(clientRouter);
+        client = clientGenerator.apply(clientRouter, new TestRuntime());
+    }
+
+    public void resetServer() {
+        super.resetTest();
+    }
+
+    public void resetServer(ServerContext context) {
+        super.resetTest(context);
     }
 }

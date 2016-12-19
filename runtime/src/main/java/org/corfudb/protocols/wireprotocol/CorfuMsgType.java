@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.corfudb.router.IRespondableMsgType;
+import org.corfudb.runtime.exceptions.OverwriteException;
 import org.corfudb.runtime.view.Layout;
 import java.lang.invoke.LambdaMetafactory;
 import java.lang.invoke.MethodHandle;
@@ -16,31 +17,29 @@ import java.util.function.Function;
 /**
  * Created by mwei on 8/8/16.
  */
-@RequiredArgsConstructor
-@AllArgsConstructor
 public enum CorfuMsgType implements IRespondableMsgType<CorfuMsg> {
     // Base Messages
-    PING(0, TypeToken.of(CorfuMsg.class), true),
-    PONG_RESPONSE(1, TypeToken.of(CorfuMsg.class), true),
-    RESET(2, TypeToken.of(CorfuMsg.class), true),
-    SEAL_EPOCH(3, new TypeToken<CorfuPayloadMsg<Long>>() {}, true),
-    ACK_RESPONSE(4, TypeToken.of(CorfuMsg.class), true),
-    WRONG_EPOCH_ERROR(5, new TypeToken<CorfuPayloadMsg<Long>>() {},  true),
+    PING(0, TypeToken.of(CorfuMsg.class)),
+    PONG_RESPONSE(1, TypeToken.of(CorfuMsg.class)),
+    RESET(2, TypeToken.of(CorfuMsg.class)),
+    SEAL_EPOCH(3, new TypeToken<CorfuPayloadMsg<Long>>() {}),
+    ACK_RESPONSE(4, TypeToken.of(CorfuMsg.class)),
+    WRONG_EPOCH_ERROR(5, new TypeToken<CorfuPayloadMsg<Long>>() {}),
     NACK_ERROR(6, TypeToken.of(CorfuMsg.class)),
-    VERSION_REQUEST(7, TypeToken.of(CorfuMsg.class), true),
-    VERSION_RESPONSE(8, new TypeToken<JSONPayloadMsg<VersionInfo>>() {}, true),
+    VERSION_REQUEST(7, TypeToken.of(CorfuMsg.class)),
+    VERSION_RESPONSE(8, new TypeToken<JSONPayloadMsg<VersionInfo>>() {}),
 
     // Layout Messages
-    LAYOUT_REQUEST(10, new TypeToken<CorfuPayloadMsg<Long>>(){}, true),
-    LAYOUT_RESPONSE(11, TypeToken.of(LayoutMsg.class), true),
-    LAYOUT_PREPARE(12, new TypeToken<CorfuPayloadMsg<LayoutPrepareRequest>>(){}, true),
+    LAYOUT_REQUEST(10, new TypeToken<CorfuPayloadMsg<Long>>(){}),
+    LAYOUT_RESPONSE(11, TypeToken.of(LayoutMsg.class)),
+    LAYOUT_PREPARE(12, new TypeToken<CorfuPayloadMsg<LayoutPrepareRequest>>(){}),
     LAYOUT_PREPARE_REJECT_ERROR(13, new TypeToken<CorfuPayloadMsg<LayoutPrepareResponse>>(){}),
-    LAYOUT_PROPOSE(14, new TypeToken<CorfuPayloadMsg<LayoutProposeRequest>>(){}, true),
+    LAYOUT_PROPOSE(14, new TypeToken<CorfuPayloadMsg<LayoutProposeRequest>>(){}),
     LAYOUT_PROPOSE_REJECT_ERROR(15, new TypeToken<CorfuPayloadMsg<LayoutProposeResponse>>(){}),
-    LAYOUT_COMMITTED(16, new TypeToken<CorfuPayloadMsg<LayoutCommittedRequest>>(){}, true),
+    LAYOUT_COMMITTED(16, new TypeToken<CorfuPayloadMsg<LayoutCommittedRequest>>(){}),
     LAYOUT_QUERY(17, new TypeToken<CorfuPayloadMsg<Long>>(){}),
-    LAYOUT_BOOTSTRAP(18, new TypeToken<CorfuPayloadMsg<LayoutBootstrapRequest>>(){}, true),
-    LAYOUT_NOBOOTSTRAP_ERROR(19, TypeToken.of(CorfuMsg.class), true),
+    LAYOUT_BOOTSTRAP(18, new TypeToken<CorfuPayloadMsg<LayoutBootstrapRequest>>(){}),
+    LAYOUT_NOBOOTSTRAP_ERROR(19, TypeToken.of(CorfuMsg.class)),
 
     // Sequencer Messages
     TOKEN_REQUEST(20, new TypeToken<CorfuPayloadMsg<TokenRequest>>(){}),
@@ -59,7 +58,7 @@ public enum CorfuMsgType implements IRespondableMsgType<CorfuMsg> {
 
     WRITE_OK_RESPONSE(50, TypeToken.of(CorfuMsg.class)),
     TRIMMED_ERROR(51, TypeToken.of(CorfuMsg.class)),
-    OVERWRITE_ERROR(52, TypeToken.of(CorfuMsg.class)),
+    OVERWRITE_ERROR(52, TypeToken.of(CorfuMsg.class), x-> new OverwriteException()),
     OOS_ERROR(53, TypeToken.of(CorfuMsg.class)),
     RANK_ERROR(54, TypeToken.of(CorfuMsg.class)),
     NOENTRY_ERROR(55, TypeToken.of(CorfuMsg.class)),
@@ -67,19 +66,33 @@ public enum CorfuMsgType implements IRespondableMsgType<CorfuMsg> {
     DATA_CORRUPTION_ERROR(57, new TypeToken<CorfuPayloadMsg<ReadResponse>>() {}),
 
     // EXTRA CODES
-    LAYOUT_ALREADY_BOOTSTRAP_ERROR(60, TypeToken.of(CorfuMsg.class), true),
-    LAYOUT_PREPARE_ACK_RESPONSE(61, new TypeToken<CorfuPayloadMsg<LayoutPrepareResponse>>(){}, true),
+    LAYOUT_ALREADY_BOOTSTRAP_ERROR(60, TypeToken.of(CorfuMsg.class)),
+    LAYOUT_PREPARE_ACK_RESPONSE(61, new TypeToken<CorfuPayloadMsg<LayoutPrepareResponse>>(){}),
 
     // Management Codes
-    MANAGEMENT_BOOTSTRAP(62, new TypeToken<CorfuPayloadMsg<Layout>>(){}, true),
-    MANAGEMENT_FAILURE_DETECTED(63, new TypeToken<CorfuPayloadMsg<FailureDetectorMsg>>(){}, true),
-    MANAGEMENT_NOBOOTSTRAP(64, TypeToken.of(CorfuMsg.class), true),
-    MANAGEMENT_ALREADY_BOOTSTRAP(65, TypeToken.of(CorfuMsg.class), true);
+    MANAGEMENT_BOOTSTRAP(62, new TypeToken<CorfuPayloadMsg<Layout>>(){}),
+    MANAGEMENT_FAILURE_DETECTED(63, new TypeToken<CorfuPayloadMsg<FailureDetectorMsg>>(){}),
+    MANAGEMENT_NOBOOTSTRAP(64, TypeToken.of(CorfuMsg.class)),
+    MANAGEMENT_ALREADY_BOOTSTRAP(65, TypeToken.of(CorfuMsg.class));
 
     public final int type;
     public final TypeToken<? extends CorfuMsg> messageType;
+    @Getter
+    public final Function<CorfuMsg, Exception> exceptionGenerator;
     //public final Class<? extends AbstractServer> handler;
-    public Boolean ignoreEpoch = false;
+
+    CorfuMsgType(int type, TypeToken<? extends CorfuMsg> messageType) {
+        this.type = type;
+        this.messageType = messageType;
+        exceptionGenerator = null;
+    }
+
+    CorfuMsgType(int type, TypeToken<? extends CorfuMsg> messageType,
+                 Function<CorfuMsg, Exception> exceptionGenerator) {
+        this.type = type;
+        this.messageType = messageType;
+        this.exceptionGenerator = exceptionGenerator;
+    }
 
     public <T> CorfuPayloadMsg<T> payloadMsg(T payload) {
         // todo:: maybe some typechecking here (performance impact?)
@@ -104,10 +117,6 @@ public enum CorfuMsgType implements IRespondableMsgType<CorfuMsg> {
         return new CorfuMsg(this);
     }
 
-    @Override
-    public Function getExceptionGenerator() {
-        return null;
-    }
 
     @FunctionalInterface
     interface MessageConstructor<T> {

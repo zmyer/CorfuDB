@@ -41,7 +41,8 @@ public abstract class AbstractServerTest
     /** The function used to generate new servers.
      */
     private final
-        Function<IServerRouter<CorfuMsg, CorfuMsgType>, S> serverFactory;
+    BiFunction<IServerRouter<CorfuMsg, CorfuMsgType>,
+        ServerContext, S> serverFactory;
 
     /** The current server for this test. */
     private IServer<CorfuMsg, CorfuMsgType> server;
@@ -55,7 +56,7 @@ public abstract class AbstractServerTest
      */
     public AbstractServerTest(
             Function<IServerRouter<CorfuMsg, CorfuMsgType>, S> serverFactory) {
-        this.serverFactory = serverFactory;
+        this.serverFactory = (server, ctx) -> serverFactory.apply(server);
     }
 
     /** Constructor, using a function with generates servers with a context.
@@ -64,7 +65,7 @@ public abstract class AbstractServerTest
      */
     public AbstractServerTest(BiFunction<IServerRouter<CorfuMsg, CorfuMsgType>,
             ServerContext, S> serverFactory) {
-        this.serverFactory = r -> serverFactory.apply(r, getServerContext());
+        this.serverFactory = serverFactory;
     }
 
     /** Get the server context, which defaults to a default context using port
@@ -81,15 +82,22 @@ public abstract class AbstractServerTest
         return (S) server;
     }
 
-    /** Reset this test. */
+    /** Reset this test server, using the default server context. */
     @Before
     public void resetTest() {
+        resetTest(getServerContext());
+    }
+
+    /** Reset this test server, using the given server context.
+     * @param context The context to pass to the server.
+     */
+    public void resetTest(ServerContext context) {
         if (router != null) {
             router.stop();
         }
         router = new TestServerRouter<>();
         testChannel = new SimpleTestChannel();
-        server = serverFactory.apply(router);
+        server = serverFactory.apply(router, context);
         router.registerServer(server);
         router.start();
     }

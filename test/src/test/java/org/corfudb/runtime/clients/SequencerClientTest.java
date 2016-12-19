@@ -13,9 +13,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Created by mwei on 12/14/15.
  */
-public class SequencerClientTest extends AbstractClientTest {
+public class SequencerClientTest extends AbstractClientTest<SequencerClient,
+                                                            SequencerServer> {
 
-    SequencerClient client;
+    public SequencerClientTest() {
+        super(SequencerClient::new, SequencerServer::new);
+    }
 
    // @Override
   // Set<AbstractServer> getServersForTest() {
@@ -35,14 +38,14 @@ public class SequencerClientTest extends AbstractClientTest {
     @Test
     public void canGetAToken()
             throws Exception {
-        client.nextToken(Collections.<UUID>emptySet(), 1).get();
+        getClient().nextToken(Collections.<UUID>emptySet(), 1).get();
     }
 
     @Test
     public void tokensAreIncrementing()
             throws Exception {
-        long token = client.nextToken(Collections.<UUID>emptySet(), 1).get().getToken();
-        long token2 = client.nextToken(Collections.<UUID>emptySet(), 1).get().getToken();
+        long token = getClient().nextToken(Collections.<UUID>emptySet(), 1).get().getToken();
+        long token2 = getClient().nextToken(Collections.<UUID>emptySet(), 1).get().getToken();
         assertThat(token2)
                 .isGreaterThan(token);
     }
@@ -50,8 +53,8 @@ public class SequencerClientTest extends AbstractClientTest {
     @Test
     public void checkTokenPositionWorks()
             throws Exception {
-        long token = client.nextToken(Collections.<UUID>emptySet(), 1).get().getToken();
-        long token2 = client.nextToken(Collections.<UUID>emptySet(), 0).get().getToken();
+        long token = getClient().nextToken(Collections.<UUID>emptySet(), 1).get().getToken();
+        long token2 = getClient().nextToken(Collections.<UUID>emptySet(), 0).get().getToken();
         assertThat(token)
                 .isEqualTo(token2);
     }
@@ -61,19 +64,19 @@ public class SequencerClientTest extends AbstractClientTest {
             throws Exception {
         UUID streamA = UUID.nameUUIDFromBytes("streamA".getBytes());
         UUID streamB = UUID.nameUUIDFromBytes("streamB".getBytes());
-        client.nextToken(Collections.singleton(streamA), 1).get();
-        long tokenA = client.nextToken(Collections.singleton(streamA), 1).get().getToken();
-        long tokenA2 = client.nextToken(Collections.singleton(streamA), 0).get().getToken();
+        getClient().nextToken(Collections.singleton(streamA), 1).get();
+        long tokenA = getClient().nextToken(Collections.singleton(streamA), 1).get().getToken();
+        long tokenA2 = getClient().nextToken(Collections.singleton(streamA), 0).get().getToken();
         assertThat(tokenA)
                 .isEqualTo(tokenA2);
-        long tokenB = client.nextToken(Collections.singleton(streamB), 0).get().getToken();
+        long tokenB = getClient().nextToken(Collections.singleton(streamB), 0).get().getToken();
         assertThat(tokenB)
                 .isNotEqualTo(tokenA2);
-        long tokenB2 = client.nextToken(Collections.singleton(streamB), 1).get().getToken();
-        long tokenB3 = client.nextToken(Collections.singleton(streamB), 0).get().getToken();
+        long tokenB2 = getClient().nextToken(Collections.singleton(streamB), 1).get().getToken();
+        long tokenB3 = getClient().nextToken(Collections.singleton(streamB), 0).get().getToken();
         assertThat(tokenB2)
                 .isEqualTo(tokenB3);
-        long tokenA3 = client.nextToken(Collections.singleton(streamA), 0).get().getToken();
+        long tokenA3 = getClient().nextToken(Collections.singleton(streamA), 0).get().getToken();
         assertThat(tokenA3)
                 .isEqualTo(tokenA2);
     }

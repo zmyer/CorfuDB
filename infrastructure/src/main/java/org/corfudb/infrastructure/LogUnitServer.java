@@ -42,6 +42,7 @@ import org.corfudb.protocols.wireprotocol.CorfuMsg;
 import org.corfudb.protocols.wireprotocol.CorfuMsgType;
 import org.corfudb.protocols.wireprotocol.CorfuPayloadMsg;
 import org.corfudb.protocols.wireprotocol.DataType;
+import org.corfudb.protocols.wireprotocol.FillHoleRequest;
 import org.corfudb.protocols.wireprotocol.IMetadata;
 import org.corfudb.protocols.wireprotocol.LogData;
 import org.corfudb.protocols.wireprotocol.ReadRequest;
@@ -191,7 +192,7 @@ public class LogUnitServer extends AbstractEpochedServer<LogUnitServer> {
     }
 
     @ServerHandler(type=CorfuMsgType.FILL_HOLE)
-    private CorfuMsg fillHole(CorfuPayloadMsg<TrimRequest> msg, IChannel<CorfuMsg> channel) {
+    private CorfuMsg fillHole(CorfuPayloadMsg<FillHoleRequest> msg, IChannel<CorfuMsg> channel) {
         try {
             dataCache.put(new LogAddress(msg.getPayload().getPrefix(), msg.getPayload().getStream()), LogData.HOLE);
             return CorfuMsgType.WRITE_OK_RESPONSE.msg();

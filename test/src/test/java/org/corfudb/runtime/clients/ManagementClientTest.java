@@ -19,11 +19,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * <p>
  * Created by zlokhandwala on 11/7/16.
  */
-public class ManagementClientTest extends AbstractClientTest {
+public class ManagementClientTest extends AbstractClientTest<ManagementClient,
+                                                            ManagementServer> {
 
-    ManagementClient client;
-    ManagementServer server;
-
+    public ManagementClientTest() {
+        super(ManagementClient::new, ManagementServer::new);
+    }
     /*
     @Override
     Set<AbstractServer> getServersForTest() {
@@ -53,14 +54,6 @@ public class ManagementClientTest extends AbstractClientTest {
     }
 */
     /**
-     * Need to shutdown the servers after test.
-     */
-    @After
-    public void cleanUp() {
-        server.shutdown();
-    }
-
-    /**
      * Tests the bootstrapping of the management server.
      *
      * @throws Exception
@@ -69,7 +62,9 @@ public class ManagementClientTest extends AbstractClientTest {
     public void handleBootstrap()
             throws Exception {
         // Since the servers are started as single nodes thus already bootstrapped.
-        assertThatThrownBy(() -> client.bootstrapManagement(TestLayoutBuilder.single(SERVERS.PORT_0)).get()).isInstanceOf(ExecutionException.class);
+        assertThatThrownBy(() -> getClient()
+                .bootstrapManagement(TestLayoutBuilder.single(SERVERS.PORT_0))
+                .get()).isInstanceOf(ExecutionException.class);
     }
 
     /**
@@ -84,6 +79,6 @@ public class ManagementClientTest extends AbstractClientTest {
         // Since the servers are started as single nodes thus already bootstrapped.
         Map map = new HashMap<String, Boolean>();
         map.put("Key", true);
-        assertThat(client.handleFailure(map).get()).isEqualTo(true);
+        assertThat(getClient().handleFailure(map).get()).isEqualTo(true);
     }
 }

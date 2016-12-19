@@ -140,7 +140,8 @@ public abstract class AbstractClientRouter<M extends IRoutableMsg<T>
      */
     protected void handleServerMessage(final M message,
                                        final IChannel<M> channel) {
-        if (message.getMsgType().isResponse()) {
+        if (message.getMsgType().isResponse()
+                || message.getMsgType().isError()) {
             final CompletableFuture<M> future = completionMap.get(
                     message.getRequestID());
             if (future != null) {
