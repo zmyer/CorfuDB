@@ -306,9 +306,11 @@ public class CorfuRuntime {
                 for (String s : layoutServersCopy) {
                     log.debug("Trying connection to layout server {}", s);
                     try {
-                        IClientRouter<CorfuMsg, CorfuMsgType> router = getRouter(s);
+                        IClientRouter<CorfuMsg, CorfuMsgType> router =
+                                getRouter(s);
                         // Try to get a layout.
-                        CompletableFuture<Layout> layoutFuture = router.getClient(LayoutClient.class).getLayout();
+                        CompletableFuture<Layout> layoutFuture = router
+                                .getClient(LayoutClient.class).getLayout();
                         // Wait for layout
                         Layout l = layoutFuture.get();
                         l.setRuntime(this);

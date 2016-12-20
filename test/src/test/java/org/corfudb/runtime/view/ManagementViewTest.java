@@ -6,10 +6,14 @@ import org.corfudb.protocols.wireprotocol.CorfuMsgType;
 import org.corfudb.runtime.clients.TestRule;
 import org.junit.Test;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Test to verify the Management Server functionality.
@@ -73,4 +77,38 @@ public class ManagementViewTest extends AbstractViewTest {
                         .toNanos(),
                 TimeUnit.NANOSECONDS)).isEqualTo(true);
     }
+
+
+    /**
+     * Tests the bootstrapping of the management server.
+     *
+     * @throws Exception
+     */
+    /*
+    @Test
+    public void handleBootstrap()
+            throws Exception {
+        // Since the servers are started as single nodes thus already bootstrapped.
+        assertThatThrownBy(() -> getClient()
+                .bootstrapManagement(TestLayoutBuilder.single(SERVERS.PORT_0))
+                .get()).isInstanceOf(ExecutionException.class);
+    }
+    */
+
+    /**
+     * Tests the msg handler for failure detection.
+     *
+     * @throws Exception
+     */
+    /*
+    @Test
+    public void handleFailure()
+            throws Exception {
+
+        // Since the servers are started as single nodes thus already bootstrapped.
+        Map map = new HashMap<String, Boolean>();
+        map.put("Key", true);
+        assertThat(getClient().handleFailure(map).get()).isEqualTo(true);
+    }
+    */
 }

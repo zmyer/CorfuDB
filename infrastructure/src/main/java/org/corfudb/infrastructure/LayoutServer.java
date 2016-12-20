@@ -249,11 +249,13 @@ public class LayoutServer extends AbstractPreconditionServer<CorfuMsg, CorfuMsgT
         // This is a prepare. If the rank is less than or equal to the phase 1 rank, reject.
         if (phase1Rank != null && prepareRank.lessThanEqualTo(phase1Rank)) {
             log.debug("Rejected phase 1 prepare of rank={}, phase1Rank={}", prepareRank, phase1Rank);
-            return CorfuMsgType.LAYOUT_PREPARE_REJECT_ERROR.payloadMsg(new LayoutPrepareResponse(phase1Rank.getRank(), proposedLayout));
+            return CorfuMsgType.LAYOUT_PREPARE_REJECT_ERROR
+                    .payloadMsg(new LayoutPrepareResponse(phase1Rank.getRank(), proposedLayout));
         } else {
             setPhase1Rank(prepareRank);
             log.debug("New phase 1 rank={}", getPhase1Rank());
-            return CorfuMsgType.LAYOUT_PREPARE_ACK_RESPONSE.payloadMsg(new LayoutPrepareResponse(prepareRank.getRank(), proposedLayout));
+            return CorfuMsgType.LAYOUT_PREPARE_ACK_RESPONSE
+                    .payloadMsg(new LayoutPrepareResponse(prepareRank.getRank(), proposedLayout));
         }
     }
 

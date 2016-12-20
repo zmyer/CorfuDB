@@ -40,15 +40,17 @@ public enum CorfuMsgType implements IRespondableMsgType<CorfuMsg> {
     LAYOUT_PREPARE(12, new TypeToken<CorfuPayloadMsg<LayoutPrepareRequest>>(){}),
     LAYOUT_PREPARE_REJECT_ERROR(13, new TypeToken<CorfuPayloadMsg<LayoutPrepareResponse>>(){},
             x ->
-                    new OutrankedException(((CorfuPayloadMsg<LayoutProposeResponse>)x).getPayload().getRank())),
+                    new OutrankedException(((CorfuPayloadMsg<LayoutPrepareResponse>)x).getPayload().getRank())),
     LAYOUT_PROPOSE(14, new TypeToken<CorfuPayloadMsg<LayoutProposeRequest>>(){}),
     LAYOUT_PROPOSE_REJECT_ERROR(15, new TypeToken<CorfuPayloadMsg<LayoutProposeResponse>>(){},
             x ->
-                    new OutrankedException(((CorfuPayloadMsg<LayoutProposeResponse>)x).getPayload().getRank())),
+                    new OutrankedException(((CorfuPayloadMsg<LayoutProposeResponse>)x)
+                            .getPayload().getRank())),
     LAYOUT_COMMITTED(16, new TypeToken<CorfuPayloadMsg<LayoutCommittedRequest>>(){}),
     LAYOUT_QUERY(17, new TypeToken<CorfuPayloadMsg<Long>>(){}),
     LAYOUT_BOOTSTRAP(18, new TypeToken<CorfuPayloadMsg<LayoutBootstrapRequest>>(){}),
-    LAYOUT_NOBOOTSTRAP_ERROR(19, TypeToken.of(CorfuMsg.class), x -> new NoBootstrapException()),
+    LAYOUT_NOBOOTSTRAP_ERROR(19, TypeToken.of(CorfuMsg.class),
+            x -> new NoBootstrapException()),
 
     // Sequencer Messages
     TOKEN_REQUEST(20, new TypeToken<CorfuPayloadMsg<TokenRequest>>(){}),

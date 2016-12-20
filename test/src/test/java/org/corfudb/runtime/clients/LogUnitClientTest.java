@@ -156,7 +156,10 @@ public class LogUnitClientTest extends
 
         // In order to clear the logunit's cache, the server is restarted so that
         // the next read is forced to be retrieved from file and not the cache
-        resetServer();
+        resetServer(new ServerContextBuilder()
+                .setMemory(false)
+                .setLogPath(PARAMETERS.TEST_TEMP_DIR)
+                .build());
 
         // Corrupt the written log entry
         String logFilePath = PARAMETERS.TEST_TEMP_DIR + File.separator +

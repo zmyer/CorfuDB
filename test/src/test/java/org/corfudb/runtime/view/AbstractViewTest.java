@@ -17,7 +17,14 @@ import org.corfudb.router.IRequestClientRouter;
 import org.corfudb.router.IServerRouter;
 import org.corfudb.router.test.TestClientRouter;
 import org.corfudb.router.test.TestServerRouter;
+import org.corfudb.router.test.TestServerToClientChannel;
+import org.corfudb.router.test.VoidChannel;
 import org.corfudb.runtime.CorfuRuntime;
+import org.corfudb.runtime.clients.BaseClient;
+import org.corfudb.runtime.clients.LayoutClient;
+import org.corfudb.runtime.clients.LogUnitClient;
+import org.corfudb.runtime.clients.ManagementClient;
+import org.corfudb.runtime.clients.SequencerClient;
 import org.corfudb.runtime.clients.TestRule;
 import org.junit.After;
 import org.junit.Before;
@@ -90,6 +97,11 @@ public abstract class AbstractViewTest extends AbstractCorfuTest {
                             TestClientRouter.<CorfuMsg, CorfuMsgType>builder()
                                     .setEndpoint(testServerMap.get(endpoint).getServerRouter())
                                     .build();
+                    tcn.registerRequestClient(y -> new BaseClient(y));
+                    tcn.registerRequestClient(y -> new LogUnitClient(y, runtime));
+                    tcn.registerRequestClient(y -> new SequencerClient(y, runtime));
+                    tcn.registerRequestClient(y -> new LayoutClient(y));
+                    tcn.registerRequestClient(y -> new ManagementClient(y));
                     return tcn;
                 }
         );
@@ -219,11 +231,12 @@ public abstract class AbstractViewTest extends AbstractCorfuTest {
                 .forEach(e -> {
                     e.getValue().layoutServer.reset();
                     e.getValue().layoutServer
-                            .handleMessage(CorfuMsgType.LAYOUT_BOOTSTRAP.payloadMsg(new LayoutBootstrapRequest(l)),
-                                    null);
+                            .handleMessage(CorfuMsgType.LAYOUT_BOOTSTRAP
+                                            .payloadMsg(new LayoutBootstrapRequest(l)),
+                                    new VoidChannel<>());
                     e.getValue().managementServer
                             .handleMessage(CorfuMsgType.MANAGEMENT_BOOTSTRAP.payloadMsg(l),
-                                    null);
+                                    new VoidChannel<>());
                 });
     }
 

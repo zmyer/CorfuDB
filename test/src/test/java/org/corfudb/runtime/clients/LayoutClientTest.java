@@ -81,6 +81,7 @@ public class LayoutClientTest extends AbstractClientTest<LayoutClient,
 
     final long RANK_LOW = 5L;
     final long RANK_HIGH = 10L;
+
     @Test
     public void prepareRejectsLowerRanks()
             throws Exception {
