@@ -11,6 +11,7 @@ import org.corfudb.runtime.exceptions.NoBootstrapException;
 import org.corfudb.runtime.exceptions.OutOfSpaceException;
 import org.corfudb.runtime.exceptions.OutrankedException;
 import org.corfudb.runtime.exceptions.OverwriteException;
+import org.corfudb.runtime.exceptions.WrongEpochException;
 import org.corfudb.runtime.view.Layout;
 import java.lang.invoke.LambdaMetafactory;
 import java.lang.invoke.MethodHandle;
@@ -29,7 +30,8 @@ public enum CorfuMsgType implements IRespondableMsgType<CorfuMsg> {
     RESET(2, TypeToken.of(CorfuMsg.class)),
     SEAL_EPOCH(3, new TypeToken<CorfuPayloadMsg<Long>>() {}),
     ACK_RESPONSE(4, TypeToken.of(CorfuMsg.class)),
-    WRONG_EPOCH_ERROR(5, new TypeToken<CorfuPayloadMsg<Long>>() {}),
+    WRONG_EPOCH_ERROR(5, new TypeToken<CorfuPayloadMsg<Long>>() {}, x ->
+            new WrongEpochException(x.getEpoch())),
     NACK_ERROR(6, TypeToken.of(CorfuMsg.class)),
     VERSION_REQUEST(7, TypeToken.of(CorfuMsg.class)),
     VERSION_RESPONSE(8, new TypeToken<JSONPayloadMsg<VersionInfo>>() {}),

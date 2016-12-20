@@ -107,4 +107,8 @@ public class LayoutClient extends AbstractRequestClient<CorfuMsg, CorfuMsgType> 
                 .thenApply(x -> x.getMsgType() == CorfuMsgType.ACK_RESPONSE);
     }
 
+    public CompletableFuture<Boolean> seal(long epoch) {
+        return sendMessageAndGetResponse(CorfuMsgType.SEAL_EPOCH.payloadMsg(epoch))
+                .thenApply(x -> x.getMsgType() == CorfuMsgType.ACK_RESPONSE);
+    }
 }
