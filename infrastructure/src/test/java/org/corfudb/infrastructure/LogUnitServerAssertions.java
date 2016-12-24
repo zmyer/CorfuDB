@@ -61,17 +61,13 @@ public class LogUnitServerAssertions extends AbstractAssert<LogUnitServerAsserti
         if (actual.dataCache.get(new LogAddress(address, null)) == null) {
             failWithMessage("Expected address <%d> to contain data but was empty!", address);
         } else {
-            actual.dataCache.get(new LogAddress(address, null)).getData().resetReaderIndex();
             ByteBuf b = UnpooledByteBufAllocator.DEFAULT.buffer();
             Serializers.CORFU.serialize(data, b);
             byte[] expected = new byte[b.readableBytes()];
             b.getBytes(0, expected);
-            int actualbytes = actual.dataCache.get(new LogAddress(address, null)).getData().readableBytes();
-            byte[] actualb = new byte[actualbytes];
-            actual.dataCache.get(new LogAddress(address, null)).getData().getBytes(0, actualb);
-            actual.dataCache.get(new LogAddress(address, null)).getData().resetReaderIndex();
 
-            org.assertj.core.api.Assertions.assertThat(actualb)
+            org.assertj.core.api.Assertions.assertThat(
+                    actual.dataCache.get(new LogAddress(address, null)).getData())
                     .isEqualTo(expected);
         }
 

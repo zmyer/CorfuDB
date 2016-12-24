@@ -1,9 +1,12 @@
 package org.corfudb.protocols.wireprotocol;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufAllocator;
+import io.netty.buffer.Unpooled;
 import lombok.Getter;
 import org.corfudb.protocols.logprotocol.LogEntry;
 import org.corfudb.runtime.CorfuRuntime;
+import org.corfudb.util.AutoCloseableByteBuf;
 import org.corfudb.util.serializer.Serializers;
 
 import java.util.EnumMap;
@@ -21,7 +24,7 @@ public class LogData implements ICorfuPayload<LogData>, IMetadata, ILogData {
     final DataType type;
 
     @Getter
-    final ByteBuf data;
+    final byte[] data;
 
     private transient final AtomicReference<Object> payload = new AtomicReference<>();
 
@@ -35,15 +38,15 @@ public class LogData implements ICorfuPayload<LogData>, IMetadata, ILogData {
                         this.payload.set(null);
                     }
                     else {
-                        data.resetReaderIndex();
-                        final Object actualValue = Serializers.CORFU.deserialize(data, runtime);
-                        // TODO: Possibly fix some dependencies here.
-                        if (actualValue instanceof LogEntry) {
-                            ((LogEntry) actualValue).setEntry(this);
-                            ((LogEntry) actualValue).setRuntime(runtime);
-                        }
-                        value = actualValue == null ? this.payload : actualValue;
-                        this.payload.set(value);
+                            final Object actualValue = Serializers.CORFU.deserialize(
+                                    Unpooled.wrappedBuffer(data), runtime);
+                            // TODO: Possibly fix some dependencies here.
+                            if (actualValue instanceof LogEntry) {
+                                ((LogEntry) actualValue).setEntry(this);
+                                ((LogEntry) actualValue).setRuntime(runtime);
+                            }
+                            value = actualValue == null ? this.payload : actualValue;
+                            this.payload.set(value);
                     }
                 }
             }
@@ -57,7 +60,7 @@ public class LogData implements ICorfuPayload<LogData>, IMetadata, ILogData {
     public LogData(ByteBuf buf) {
         type = ICorfuPayload.fromBuffer(buf, DataType.class);
         if (type == DataType.DATA) {
-            data = ICorfuPayload.fromBuffer(buf, ByteBuf.class);
+            data = ICorfuPayload.fromBuffer(buf, byte[].class);
             metadataMap =
                     ICorfuPayload.enumMapFromBuffer(buf,
                             IMetadata.LogUnitMetadataType.class, Object.class);
@@ -75,14 +78,20 @@ public class LogData implements ICorfuPayload<LogData>, IMetadata, ILogData {
     }
 
     public LogData(DataType type, ByteBuf buf) {
+        buf = buf.asReadOnly();
+        buf.resetReaderIndex();
         this.type = type;
-        this.data = buf;
+        this.data = new byte[buf.readableBytes()];
+        buf.readBytes(this.data);
         this.metadataMap = new EnumMap<>(IMetadata.LogUnitMetadataType.class);
     }
 
     public LogData(ByteBuf buf, EnumMap<LogUnitMetadataType, Object> metadataMap) {
+        buf = buf.asReadOnly();
+        buf.resetReaderIndex();
         this.type = DataType.DATA;
-        this.data = buf;
+        this.data = new byte[buf.readableBytes()];
+        buf.readBytes(this.data);
         this.metadataMap = metadataMap;
     }
 

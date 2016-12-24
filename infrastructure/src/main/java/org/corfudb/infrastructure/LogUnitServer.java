@@ -286,11 +286,6 @@ public class LogUnitServer extends AbstractEpochedServer<LogUnitServer> {
             streamLog = new StreamLogFiles(logdir, (Boolean) opts.get("--no-verify"));
         }
 
-        if (dataCache != null) {
-            /** Free all references */
-            dataCache.asMap().values().parallelStream()
-                    .map(m -> m.getData().release());
-        }
 
         if (batchWriter != null) {
             batchWriter.close();
@@ -299,7 +294,7 @@ public class LogUnitServer extends AbstractEpochedServer<LogUnitServer> {
         batchWriter = new BatchWriter(streamLog);
 
         dataCache = Caffeine.<LogAddress, LogData>newBuilder()
-                .<LogAddress, LogData>weigher((k, v) -> v.getData() == null ? 1 : v.getData().readableBytes())
+                .<LogAddress, LogData>weigher((k, v) -> v.getData() == null ? 1 : v.getData().length)
                 .maximumWeight(maxCacheSize)
                 .removalListener(this::handleEviction)
                 .writer(batchWriter)
@@ -388,10 +383,6 @@ public class LogUnitServer extends AbstractEpochedServer<LogUnitServer> {
         // Invalidate this entry from the cache. This will cause the CacheLoader to free the entry from the disk
         // assuming the entry is back by disk
         dataCache.invalidate(address);
-        //and free any references the buffer might have
-        if (entry.getData() != null) {
-            entry.getData().release();
-        }
     }
 
     /**

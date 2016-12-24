@@ -67,7 +67,7 @@ public class AddressSpaceView extends AbstractView {
      */
     public void resetCaches() {
         readCache = Caffeine.<Long, LogData>newBuilder()
-                .<Long, LogData>weigher((k, v) -> v.getType() != DataType.DATA ? 1 : v.getData().readableBytes())
+                .<Long, LogData>weigher((k, v) -> v.getType() != DataType.DATA ? 1 : v.getData().length)
                 .maximumWeight(runtime.getMaxCacheSize())
                 .build(new CacheLoader<Long, LogData>() {
                     @Override
