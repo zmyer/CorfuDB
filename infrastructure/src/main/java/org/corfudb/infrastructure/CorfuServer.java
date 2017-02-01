@@ -21,6 +21,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 
+import java.io.FileInputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.security.KeyStore;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -199,9 +203,9 @@ public class CorfuServer {
             String ciphs = (String) opts.get("--tls-ciphers");
             if (ciphs != null) {
                 List<String> ciphers = Pattern.compile(",")
-                        .splitAsStream(ciphs)
-                        .map(String::trim)
-                        .collect(Collectors.toList());
+                    .splitAsStream(ciphs)
+                    .map(String::trim)
+                    .collect(Collectors.toList());
                 enabledTlsCipherSuites = ciphers.toArray(new String[ciphers.size()]);
             }
 
@@ -209,9 +213,9 @@ public class CorfuServer {
             String protos = (String) opts.get("--tls-protocols");
             if (protos != null) {
                 List<String> protocols = Pattern.compile(",")
-                        .splitAsStream(protos)
-                        .map(String::trim)
-                        .collect(Collectors.toList());
+                    .splitAsStream(protos)
+                    .map(String::trim)
+                    .collect(Collectors.toList());
                 enabledTlsProtocols = protocols.toArray(new String[protocols.size()]);
             }
 

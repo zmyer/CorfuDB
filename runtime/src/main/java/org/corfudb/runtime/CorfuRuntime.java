@@ -110,7 +110,7 @@ public class CorfuRuntime {
      * When set, overrides the default getRouterFunction. Used by the testing
      * framework to ensure the default routers used are for testing.
      */
-    public static BiFunction<CorfuRuntime, String, IClientRouter<CorfuMsg, CorfuMsgType>>
+    public BiFunction<CorfuRuntime, String, IClientRouter<CorfuMsg, CorfuMsgType>>
             overrideGetRouterFunction = (runtime, address) -> {
         // Parse the string in host:port format.
         String host = address.split(":")[0];
@@ -120,6 +120,11 @@ public class CorfuRuntime {
                 NettyClientRouter.<CorfuMsg, CorfuMsgType>builder()
                         .setHost(host)
                         .setPort(port)
+                        .setTls(tlsEnabled)
+                        .setKeyStore(keyStore)
+                        .setKsPasswordFile(ksPasswordFile)
+                        .setTrustStore(trustStore)
+                        .setTsPasswordFile(tsPasswordFile)
                         .setDecoderSupplier(NettyCorfuMessageDecoder::new)
                         .setEncoderSupplier(NettyCorfuMessageEncoder::new)
                         .build()
@@ -133,51 +138,24 @@ public class CorfuRuntime {
         return router;
     };
 
-//    /**
-//     * A function to handle getting routers. Used by test framework to inject
-//     * a test router. Can also be used to provide alternative logic for obtaining
-//     * a router.
-//     */
-//    @Getter
-//    @Setter
-//<<<<<<< HEAD
-//    public Function<String, IClientRouter<CorfuMsg,CorfuMsgType>> getRouterFunction
-//            =
-//            (address) -> {
-//                // Return an existing router if we already have one.
-//                if (nodeRouters.containsKey(address)) {
-//                    return nodeRouters.get(address);
-//                }
-//        IClientRouter<CorfuMsg,CorfuMsgType> router = overrideGetRouterFunction.apply(this, address);
-//        nodeRouters.put(address, router);
-//=======
-//    public Function<String, IClientRouter> getRouterFunction = overrideGetRouterFunction != null ?
-//            (address) -> overrideGetRouterFunction.apply(this, address) : (address) -> {
-//
-//        // Return an existing router if we already have one.
-//        if (nodeRouters.containsKey(address)) {
-//            return nodeRouters.get(address);
-//        }
-//        // Parse the string in host:port format.
-//        String host = address.split(":")[0];
-//        Integer port = Integer.parseInt(address.split(":")[1]);
-//        // Generate a new router, start it and add it to the table.
-//        NettyClientRouter router = new NettyClientRouter(host, port, tlsEnabled, keyStore,
-//            ksPasswordFile, trustStore, tsPasswordFile);
-//        log.debug("Connecting to new router {}:{}", host, port);
-//        try {
-//            router.addClient(new LayoutClient())
-//                    .addClient(new SequencerClient())
-//                    .addClient(new LogUnitClient())
-//                    .addClient(new ManagementClient())
-//                    .start();
-//            nodeRouters.put(address, router);
-//        } catch (Exception e) {
-//            log.warn("Error connecting to router", e);
-//        }
-//>>>>>>> master
-//        return router;
-//    };
+    /**
+     * A function to handle getting routers. Used by test framework to inject
+     * a test router. Can also be used to provide alternative logic for obtaining
+     * a router.
+     */
+    @Getter
+    @Setter
+    public Function<String, IClientRouter<CorfuMsg,CorfuMsgType>> getRouterFunction
+            =
+            (address) -> {
+                // Return an existing router if we already have one.
+                if (nodeRouters.containsKey(address)) {
+                    return nodeRouters.get(address);
+                }
+        IClientRouter<CorfuMsg,CorfuMsgType> router = overrideGetRouterFunction.apply(this, address);
+        nodeRouters.put(address, router);
+        return router;
+    };
 
     public CorfuRuntime() {
         layoutServers = new ArrayList<>();

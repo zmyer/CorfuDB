@@ -395,7 +395,7 @@ public class ManagementServer extends AbstractPreconditionServer<CorfuMsg, Corfu
      * Shuts down the fault detector service.
      */
     public void shutdown() {
-        super.shutdown();
+//        super.shutdown();
         // Shutting the fault detector.
         failureDetectorService.shutdownNow();
 

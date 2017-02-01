@@ -132,13 +132,13 @@ public class ManagementViewTest extends AbstractViewTest {
         routerEndpoints.add(SERVERS.ENDPOINT_0);
         routerEndpoints.add(SERVERS.ENDPOINT_1);
         routerEndpoints.add(SERVERS.ENDPOINT_2);
-        serverPorts.forEach(serverPort -> {
-            routerEndpoints.forEach(routerEndpoint -> {
-                getManagementServer(serverPort).getCorfuRuntime().getRouter(routerEndpoint).setTimeoutConnect(PARAMETERS.TIMEOUT_VERY_SHORT.toMillis());
-                getManagementServer(serverPort).getCorfuRuntime().getRouter(routerEndpoint).setTimeoutResponse(PARAMETERS.TIMEOUT_VERY_SHORT.toMillis());
-                getManagementServer(serverPort).getCorfuRuntime().getRouter(routerEndpoint).setTimeoutRetry(PARAMETERS.TIMEOUT_VERY_SHORT.toMillis());
-            });
-        });
+//        serverPorts.forEach(serverPort -> {
+//            routerEndpoints.forEach(routerEndpoint -> {
+//                getManagementServer(serverPort).getCorfuRuntime().getRouter(routerEndpoint).setTimeoutConnect(PARAMETERS.TIMEOUT_VERY_SHORT.toMillis());
+//                getManagementServer(serverPort).getCorfuRuntime().getRouter(routerEndpoint).setTimeoutResponse(PARAMETERS.TIMEOUT_VERY_SHORT.toMillis());
+//                getManagementServer(serverPort).getCorfuRuntime().getRouter(routerEndpoint).setTimeoutRetry(PARAMETERS.TIMEOUT_VERY_SHORT.toMillis());
+//            });
+//        });
 
         // Adding a rule on SERVERS.PORT_1 to drop all packets
         addServerRule(SERVERS.PORT_1, new TestRule().always().drop());

@@ -15,6 +15,7 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.codec.LengthFieldPrepender;
+import io.netty.handler.ssl.SslContext;
 import io.netty.util.concurrent.DefaultEventExecutorGroup;
 import io.netty.util.concurrent.EventExecutorGroup;
 import lombok.Data;
@@ -101,6 +102,16 @@ public class NettyClientRouter<M extends IRoutableMsg<T> & IRespondableMsg,
     @Getter
     private final int port;
 
+    /**
+     * Flag for enabling tls.
+     */
+    private static Boolean tlsEnabled = false;
+
+    /**
+     * sslContext.
+     */
+    private static SslContext sslContext;
+
     /** The message decoder. */
     private final Supplier<ChannelHandlerAdapter> decoderSupplier;
 
@@ -141,6 +152,27 @@ public class NettyClientRouter<M extends IRoutableMsg<T> & IRespondableMsg,
         this.reconnectFunction = builder.getReconnectFunction();
         this.queueMessagesOnFailure = builder.isQueueMessageOnFailure();
         this.disconnectedFunction = builder.getDisconnectFunction();
+        if (builder.tls) {
+            sslContext =
+                    TlsUtils.enableTls(TlsUtils.SslContextType.CLIENT_CONTEXT,
+                            builder.keyStore, e -> {
+                                throw new RuntimeException("Could not read the key store " +
+                                        "password file: " + e.getClass().getSimpleName(), e);
+                                },
+                            builder.ksPasswordFile, e -> {
+                                throw new RuntimeException("Could not load keys from the key " +
+                                        "store: " + e.getClass().getSimpleName(), e);
+                                },
+                            builder.trustStore, e -> {
+                                throw new RuntimeException("Could not read the trust store " +
+                                        "password file: " + e.getClass().getSimpleName(), e);
+                                },
+                            builder.tsPasswordFile, e -> {
+                                throw new RuntimeException("Could not load keys from the trust " +
+                                        "store: " + e.getClass().getSimpleName(), e);
+                                });
+            this.tlsEnabled = true;
+        }
     }
 
     /** This builder class sets defaults for the client.
@@ -167,6 +199,22 @@ public class NettyClientRouter<M extends IRoutableMsg<T> & IRespondableMsg,
 
         /** The port to use as an endpoint. */
         private int port;
+
+        /** key store. */
+        private String keyStore;
+
+        /** key store password file. */
+        private String ksPasswordFile;
+
+        /** trust store. */
+        private String trustStore;
+
+        /** trust store password file. */
+        private String tsPasswordFile;
+
+        /** tls. */
+        private Boolean tls = false;
+
 
         /** A factory to obtain decoders from messages from Netty buffers. */
         private Supplier<ChannelHandlerAdapter> decoderSupplier;
@@ -297,6 +345,10 @@ public class NettyClientRouter<M extends IRoutableMsg<T> & IRespondableMsg,
         b.handler(new ChannelInitializer<SocketChannel>() {
             @Override
             public void initChannel(final SocketChannel ch) throws Exception {
+                if (tlsEnabled) {
+                    ch.pipeline().addLast(
+                            "ssl", sslContext.newHandler(ch.alloc()));
+                }
                 ch.pipeline().addLast(new LengthFieldPrepender(
                         MAX_FRAME_BYTES));
                 ch.pipeline().addLast(
