@@ -125,7 +125,7 @@ public class AbstractCorfuTest {
             String lineOut = lineNumber == -1 ? "" : ":L" + lineNumber;
             System.out.print(ansi().a("[")
                     .fg(Ansi.Color.RED)
-                        .a("FAIL").reset()
+                    .a("FAIL").reset()
                     .a(" - ").a(e.getClass().getSimpleName())
                     .a(lineOut)
                     .a("]").newline());

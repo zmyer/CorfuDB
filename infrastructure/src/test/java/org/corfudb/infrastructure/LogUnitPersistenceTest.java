@@ -38,9 +38,7 @@ public class LogUnitPersistenceTest extends AbstractServerTest<LogUnitServer> {
                 .build();
     }
 
-
     public LogUnitPersistenceTest() {super(LogUnitServer::new);}
-
 
     @Test
     public void checkThatWritesArePersisted()

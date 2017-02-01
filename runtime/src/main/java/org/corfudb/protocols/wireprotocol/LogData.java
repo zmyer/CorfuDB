@@ -1,7 +1,6 @@
 package org.corfudb.protocols.wireprotocol;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.Unpooled;
 import lombok.Getter;
 import org.corfudb.protocols.logprotocol.LogEntry;
@@ -38,20 +37,33 @@ public class LogData implements ICorfuPayload<LogData>, IMetadata, ILogData {
                         this.payload.set(null);
                     }
                     else {
-                            final Object actualValue = Serializers.CORFU.deserialize(
-                                    Unpooled.wrappedBuffer(data), runtime);
-                            // TODO: Possibly fix some dependencies here.
+
+                        try (AutoCloseableByteBuf copyBuf =
+                                new AutoCloseableByteBuf(Unpooled.copiedBuffer(data))) {
+                            final Object actualValue =
+                                    Serializers.CORFU.deserialize(copyBuf, runtime);
+                            // TODO: Remove circular dependency on logentry.
+
                             if (actualValue instanceof LogEntry) {
                                 ((LogEntry) actualValue).setEntry(this);
                                 ((LogEntry) actualValue).setRuntime(runtime);
                             }
                             value = actualValue == null ? this.payload : actualValue;
                             this.payload.set(value);
+                        }
                     }
                 }
             }
         }
         return value;
+    }
+
+    @Override
+    public int getSizeEstimate() {
+        if (data != null) {
+            return data.length;
+        }
+        return 1;
     }
 
     @Getter
@@ -93,6 +105,14 @@ public class LogData implements ICorfuPayload<LogData>, IMetadata, ILogData {
         this.data = new byte[buf.readableBytes()];
         buf.readBytes(this.data);
         this.metadataMap = metadataMap;
+    }
+
+    public byte[] byteArrayFromBuf(final ByteBuf buf) {
+        ByteBuf readOnlyCopy = buf.asReadOnly();
+        readOnlyCopy.resetReaderIndex();
+        byte[] outArray = new byte[readOnlyCopy.readableBytes()];
+        readOnlyCopy.readBytes(outArray);
+        return outArray;
     }
 
     @Override

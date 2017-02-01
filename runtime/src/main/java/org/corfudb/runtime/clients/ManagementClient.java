@@ -1,8 +1,11 @@
 package org.corfudb.runtime.clients;
 
+import com.google.common.reflect.TypeToken;
+
 import lombok.Getter;
 import org.corfudb.protocols.wireprotocol.CorfuMsg;
 import org.corfudb.protocols.wireprotocol.CorfuMsgType;
+import org.corfudb.protocols.wireprotocol.CorfuPayloadMsg;
 import org.corfudb.protocols.wireprotocol.FailureDetectorMsg;
 import org.corfudb.router.AbstractRequestClient;
 import org.corfudb.router.ClientMsgHandler;
@@ -30,6 +33,7 @@ public class ManagementClient extends AbstractRequestClient<CorfuMsg, CorfuMsgTy
                     .generateHandlers(MethodHandles.lookup(), this,
                             ClientHandler.class, ClientHandler::type);
 
+
     public ManagementClient(IRequestClientRouter<CorfuMsg, CorfuMsgType> router) {
         super(router);
     }
@@ -42,7 +46,7 @@ public class ManagementClient extends AbstractRequestClient<CorfuMsg, CorfuMsgTy
      * bootstrap was successful, false otherwise.
      */
     public CompletableFuture<Boolean> bootstrapManagement(Layout l) {
-        return sendMessageAndGetResponse(CorfuMsgType.MANAGEMENT_BOOTSTRAP.payloadMsg(l))
+        return sendMessageAndGetResponse(CorfuMsgType.MANAGEMENT_BOOTSTRAP_REQUEST.payloadMsg(l))
                 .thenApply(x -> x.getMsgType() == CorfuMsgType.ACK_RESPONSE);
     }
 
@@ -56,5 +60,27 @@ public class ManagementClient extends AbstractRequestClient<CorfuMsg, CorfuMsgTy
         return sendMessageAndGetResponse(CorfuMsgType.MANAGEMENT_FAILURE_DETECTED
                 .payloadMsg(new FailureDetectorMsg(nodes)))
                 .thenApply(x -> x.getMsgType() == CorfuMsgType.ACK_RESPONSE);
+    }
+
+    /**
+     * Initiates failure handling in the Management Server.
+     *
+     * @return A future which returns TRUE if failure handler triggered successfully.
+     */
+    public CompletableFuture<Boolean> initiateFailureHandler() {
+        return sendMessageAndGetResponse(CorfuMsgType.MANAGEMENT_START_FAILURE_HANDLER.msg())
+                .thenApply(x -> x.getMsgType() == CorfuMsgType.ACK_RESPONSE);
+    }
+
+    /**
+     * Requests for a heartbeat message containing the node status.
+     *
+     * @return A future which will return the node health metrics of
+     * the node which was requested for the heartbeat.
+     */
+    public CompletableFuture<byte[]> sendHeartbeatRequest() {
+        return sendMessageAndGetResponse(CorfuMsgType.HEARTBEAT_REQUEST.msg(),
+                new TypeToken<CorfuPayloadMsg<byte[]>>() {})
+                .thenApply(CorfuPayloadMsg::getPayload);
     }
 }

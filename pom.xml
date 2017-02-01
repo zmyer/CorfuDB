@@ -16,6 +16,7 @@
         <module>annotations</module>
         <module>router</module>
         <module>test-infrastructure</module>
+        <module>samples</module>
     </modules>
 
     <packaging>pom</packaging>

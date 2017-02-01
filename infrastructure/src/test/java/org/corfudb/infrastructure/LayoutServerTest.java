@@ -11,6 +11,7 @@ import org.junit.Test;
 
 import java.util.UUID;
 
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -442,16 +443,36 @@ public class LayoutServerTest extends AbstractServerTest<LayoutServer> {
         s2.stop();
     }
 
-    // Same as commitReturnsAck() test, but we perhaps make a .reboot() call
-    // between each step.
+//    @Test
+//    public void testReboot() throws Exception {
+//        String serviceDir = PARAMETERS.TEST_TEMP_DIR;
+//        LayoutServer s1 = getDefaultServer(serviceDir);
+//        setServer(s1);
+//
+//        Layout layout = TestLayoutBuilder.single(SERVERS.PORT_0);
+//        final long NEW_EPOCH = 99L;
+//        layout.setEpoch(NEW_EPOCH);
+//        bootstrapServer(layout);
+//
+//        // Reboot, then check that our epoch 100 layout is still there.
+//        //s1.reboot();
+//
+//        requestLayout(NEW_EPOCH);
+//        Assertions.assertThat(getLastMessage().getMsgType())
+//                .isEqualTo(CorfuMsgType.LAYOUT_RESPONSE);
+//        Assertions.assertThat(((LayoutMsg) getLastMessage()).getLayout().getEpoch()).isEqualTo(NEW_EPOCH);
+//        s1.shutdown();
+//
+//        for (int i = 0; i < PARAMETERS.NUM_ITERATIONS_LOW; i++) {
+//            LayoutServer s2 = getDefaultServer(serviceDir);
+//            setServer(s2);
+//            commitReturnsAck(s2, i, NEW_EPOCH + 1);
+//            s2.shutdown();
+//        }
+//    }
 
-    // note: unclear what "reboot" does, so disabling this style check.
-    @SuppressWarnings("checkstyle:magicnumber")
     private void commitReturnsAck(LayoutServer s1, Integer reboot, long baseEpoch) {
 
-        if ((reboot & 1) > 0) {
-            s1.reboot();
-        }
         long newEpoch = baseEpoch + reboot;
         sendMessage(new CorfuPayloadMsg<>(CorfuMsgType.SEAL_EPOCH, newEpoch));
 
@@ -461,24 +482,11 @@ public class LayoutServerTest extends AbstractServerTest<LayoutServer> {
         sendPrepare(newEpoch, HIGH_RANK);
         assertThat(getLastMessage().getMsgType()).isEqualTo(CorfuMsgType.LAYOUT_PREPARE_ACK_RESPONSE);
 
-        if ((reboot & 2) > 0) {
-            log.debug("Rebooted server because reboot & 2 {}", reboot & 2);
-            s1.reboot();
-        }
-
         sendPropose(newEpoch, HIGH_RANK, layout);
         assertThat(getLastMessage().getMsgType()).isEqualTo(CorfuMsgType.ACK_RESPONSE);
 
-        if ((reboot & 4) > 0) {
-            s1.reboot();
-        }
-
         sendCommitted(newEpoch, layout);
         assertThat(getLastMessage().getMsgType()).isEqualTo(CorfuMsgType.ACK_RESPONSE);
-
-        if ((reboot & 8) > 0) {
-            s1.reboot();
-        }
 
         sendCommitted(newEpoch, layout);
         assertThat(getLastMessage().getMsgType()).isEqualTo(CorfuMsgType.ACK_RESPONSE);

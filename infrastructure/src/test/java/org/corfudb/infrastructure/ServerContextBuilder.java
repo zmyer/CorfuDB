@@ -13,15 +13,18 @@ import lombok.experimental.Accessors;
 @SuppressWarnings("checkstyle:magicnumber")
 public class ServerContextBuilder {
 
-    long initialToken = -1L;
+    long initialToken = 0L; // for testing, we want to reset the sequencer on each test
+
     boolean single = true;
     boolean memory = true;
     String logPath = null;
     boolean noVerify = false;
+    boolean tlsEnabled = false;
     int maxCache = 1000000;
     int checkpoint = 100;
     String address = "test";
     int port = 9000;
+    String managementBootstrapEndpoint = null;
 
     public ServerContextBuilder() {
 
@@ -36,11 +39,14 @@ public class ServerContextBuilder {
         if (logPath != null) {
          builder.put("--log-path", logPath);
         }
+        if (managementBootstrapEndpoint != null) {
+            builder.put("--management-server", managementBootstrapEndpoint);
+        }
          builder
                 .put("--no-verify", noVerify)
                 .put("--max-cache", maxCache)
-                .put("--checkpoint", checkpoint)
                 .put("--address", address)
+                .put("--enable-tls", tlsEnabled)
                 .put("<port>", port);
         return new ServerContext(builder.build());
     }

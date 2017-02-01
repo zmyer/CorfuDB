@@ -10,12 +10,7 @@ import org.corfudb.router.*;
 import org.corfudb.runtime.view.Layout;
 import org.corfudb.runtime.view.Layout.LayoutSegment;
 
-import java.io.IOException;
 import java.lang.invoke.MethodHandles;
-import java.nio.file.DirectoryStream;
-import java.nio.file.FileSystems;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.*;
 
 /**
@@ -64,10 +59,10 @@ public class LayoutServer extends AbstractPreconditionServer<CorfuMsg, CorfuMsgT
     /**
      * The options map.
      */
-    private Map<String, Object> opts;
+    private final Map<String, Object> opts;
 
     @Getter
-    private ServerContext serverContext;
+    private final ServerContext serverContext;
 
     /** Handler for the base server */
     @Getter
@@ -97,75 +92,27 @@ public class LayoutServer extends AbstractPreconditionServer<CorfuMsg, CorfuMsgT
         this.opts = serverContext.getServerConfig();
         this.serverContext = serverContext;
 
-        reboot();
-        reset_part_2();
+        if ((Boolean) opts.get("--single"))
+            getSingleNodeLayout();
     }
 
-    /**
-     * Reset the server, deleting persistent state on disk prior to rebooting.
-     */
-    public synchronized void reset() {
-        String d = serverContext.getDataStore().getLogDir();
-        if (d != null) {
-            Path dir = FileSystems.getDefault().getPath(d);
-            String prefixes[] = new String[] {PREFIX_LAYOUT, KEY_LAYOUT, PREFIX_PHASE_1, PREFIX_PHASE_2,
-                    PREFIX_LAYOUTS, "SERVER_EPOCH"};
-
-            for (String pfx : prefixes) {
-                try (DirectoryStream<Path> stream =
-                             Files.newDirectoryStream(dir, pfx + "_*")) {
-                    for (Path entry : stream) {
-                        // System.out.println("Deleting " + entry);
-                        Files.delete(entry);
-                    }
-                } catch (IOException e) {
-                    log.error("reset: error deleting prefix " + pfx + ": " + e.toString());
-                }
-            }
-            /*
-            try (DirectoryStream<Path> stream =
-                         Files.newDirectoryStream(dir, "*")) {
-                for (Path entry : stream) {
-                    System.out.println("Remaining file " + entry);
-                }
-            } catch (IOException e) {
-                log.error("reset: error deleting prefix: " + e.toString());
-            }
-            */
-        }
-        reset_part_2();
-        reboot();
-    }
-
-    private void reset_part_2() {
-        if ((Boolean) opts.get("--single")) {
-            String localAddress = opts.get("--address") + ":" + opts.get("<port>");
-            String boot_msg = "Single-node mode requested, initializing layout with single log unit and sequencer at {}.";
-
-            setCurrentLayout(new Layout(
-                    Collections.singletonList(localAddress),
-                    Collections.singletonList(localAddress),
-                    Collections.singletonList(new LayoutSegment(
-                            Layout.ReplicationMode.CHAIN_REPLICATION,
-                            0L,
-                            -1L,
-                            Collections.singletonList(
-                                    new Layout.LayoutStripe(
-                                            Collections.singletonList(localAddress)
-                                    )
-                            )
-                    )),
-                    0L
-            ));
-        }
-    }
-
-    /**
-     * Reboot the server, using persistent state on disk to restart.
-     */
-    public synchronized void reboot() {
-        serverContext.resetDataStore();
-
+    private void getSingleNodeLayout() {
+        String localAddress = opts.get("--address") + ":" + opts.get("<port>");
+        setCurrentLayout(new Layout(
+                Collections.singletonList(localAddress),
+                Collections.singletonList(localAddress),
+                Collections.singletonList(new LayoutSegment(
+                        Layout.ReplicationMode.CHAIN_REPLICATION,
+                        0L,
+                        -1L,
+                        Collections.singletonList(
+                                new Layout.LayoutStripe(
+                                        Collections.singletonList(localAddress)
+                                )
+                        )
+                )),
+                0L
+        ));
     }
 
     // Helper Methods
@@ -187,8 +134,7 @@ public class LayoutServer extends AbstractPreconditionServer<CorfuMsg, CorfuMsgT
      * Sets the new layout if the server has not been bootstrapped with one already.
      *
      * @param msg
-     * @param ctx
-     * @param r
+     * @param channel
      */
     @ServerHandler(type=CorfuMsgType.LAYOUT_BOOTSTRAP)
     public CorfuMsg handleMessageLayoutBootstrap(CorfuPayloadMsg<LayoutBootstrapRequest> msg, IChannel<CorfuMsg> channel) {
@@ -208,8 +154,7 @@ public class LayoutServer extends AbstractPreconditionServer<CorfuMsg, CorfuMsgT
     /** Respond to a epoch change message.
      *
      * @param msg      The incoming message
-     * @param ctx       The channel context
-     * @param r         The server router.
+     * @param channel       The channel context
      */
     @ServerHandler(type=CorfuMsgType.SEAL_EPOCH)
     public synchronized CorfuMsg handleMessageSealEpoch(CorfuPayloadMsg<Long> msg,
@@ -228,8 +173,7 @@ public class LayoutServer extends AbstractPreconditionServer<CorfuMsg, CorfuMsgT
     /**
      * Accepts a prepare message if the rank is higher than any accepted so far.
      * @param msg
-     * @param ctx
-     * @param r
+     * @param channel
      */
     // TODO this can work under a separate lock for this step as it does not change the global components
     @ServerHandler(type=CorfuMsgType.LAYOUT_PREPARE)
@@ -263,8 +207,7 @@ public class LayoutServer extends AbstractPreconditionServer<CorfuMsg, CorfuMsgT
      * Accepts a proposal for which it had accepted in the prepare phase.
      * A minor optimization is to reject any duplicate propose messages.
      * @param msg
-     * @param ctx
-     * @param r
+     * @param channel
      */
     @ServerHandler(type=CorfuMsgType.LAYOUT_PROPOSE)
     public CorfuMsg handleMessageLayoutPropose(CorfuPayloadMsg<LayoutProposeRequest> msg, IChannel<CorfuMsg> channel) {
@@ -306,8 +249,7 @@ public class LayoutServer extends AbstractPreconditionServer<CorfuMsg, CorfuMsgT
      * Accepts any committed layouts for the current epoch or newer epochs.
      * As part of the accept, the server changes it's current layout and epoch.
      * @param msg
-     * @param ctx
-     * @param r
+     * @param channel
      */
     // TODO If a server does not get SEAL_EPOCH layout commit message cannot reach it
     // TODO as this message is not set to ignore EPOCH.

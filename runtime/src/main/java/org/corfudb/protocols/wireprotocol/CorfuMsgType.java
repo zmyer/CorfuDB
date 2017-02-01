@@ -85,12 +85,13 @@ public enum CorfuMsgType implements IRespondableMsgType<CorfuMsg> {
     LAYOUT_PREPARE_ACK_RESPONSE(61, new TypeToken<CorfuPayloadMsg<LayoutPrepareResponse>>(){}),
 
     // Management Codes
-    MANAGEMENT_BOOTSTRAP(62, new TypeToken<CorfuPayloadMsg<Layout>>(){}),
-    MANAGEMENT_FAILURE_DETECTED(63, new TypeToken<CorfuPayloadMsg<FailureDetectorMsg>>(){}),
-    MANAGEMENT_NOBOOTSTRAP_ERROR(64, TypeToken.of(CorfuMsg.class), x ->
-            new NoBootstrapException()),
-    MANAGEMENT_ALREADY_BOOTSTRAP_ERROR(65, TypeToken.of(CorfuMsg.class), x ->
-        new AlreadyBootstrappedException());
+    MANAGEMENT_BOOTSTRAP_REQUEST(62, new TypeToken<CorfuPayloadMsg<Layout>>(){}),
+    MANAGEMENT_NOBOOTSTRAP_ERROR(63, TypeToken.of(CorfuMsg.class), x -> new NoBootstrapException()),
+    MANAGEMENT_ALREADY_BOOTSTRAP_ERROR(64, TypeToken.of(CorfuMsg.class), x -> new AlreadyBootstrappedException()),
+    MANAGEMENT_START_FAILURE_HANDLER(65, TypeToken.of(CorfuMsg.class)),
+    MANAGEMENT_FAILURE_DETECTED(66, new TypeToken<CorfuPayloadMsg<FailureDetectorMsg>>(){}),
+    HEARTBEAT_REQUEST(67, TypeToken.of(CorfuMsg.class)),
+    HEARTBEAT_RESPONSE(68, new TypeToken<CorfuPayloadMsg<byte[]>>(){});
 
     public final int type;
     public final TypeToken<? extends CorfuMsg> messageType;

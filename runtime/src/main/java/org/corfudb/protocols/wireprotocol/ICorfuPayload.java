@@ -46,9 +46,10 @@ public interface ICorfuPayload<T> {
                     return layout;
                 })
                 .put(UUID.class, x -> new UUID(x.readLong(), x.readLong()))
-                .put(byte[].class, x-> {
-                    int numBytes = x.readInt();
-                    byte[] bytes = new byte[numBytes];
+
+                .put(byte[].class, x -> {
+                    int length = x.readInt();
+                    byte[] bytes = new byte[length];
                     x.readBytes(bytes);
                     return bytes;
                 })
@@ -148,9 +149,9 @@ public interface ICorfuPayload<T> {
 
     /** A really simple flat list implementation. The first entry is the size of the set as an int,
      * and the next entries are each value..
+     * @param <V>           The type of the values.
      * @param buf        The buffer to deserialize.
      * @param valueClass    The class of the values.
-     * @param <V>           The type of the values.
      * @return
      */
     static <V> List<V> listFromBuffer(ByteBuf buf, Class<V> valueClass) {
@@ -246,7 +247,7 @@ public interface ICorfuPayload<T> {
             buffer.writeFloat((Float) payload);
         } else if (payload instanceof byte[]) {
             buffer.writeInt(((byte[]) payload).length);
-            buffer.writeBytes((byte[])payload);
+            buffer.writeBytes((byte[]) payload);
         }
         // and some standard non prims as well
         else if (payload instanceof String) {

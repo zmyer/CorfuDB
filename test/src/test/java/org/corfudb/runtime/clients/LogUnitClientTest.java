@@ -1,14 +1,17 @@
 package org.corfudb.runtime.clients;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Range;
+
+import org.corfudb.format.Types;
+
 import org.corfudb.infrastructure.LogUnitServer;
-import org.corfudb.infrastructure.ServerContext;
 import org.corfudb.infrastructure.ServerContextBuilder;
+
 import org.corfudb.protocols.wireprotocol.DataType;
 import org.corfudb.protocols.wireprotocol.IMetadata;
 import org.corfudb.protocols.wireprotocol.LogData;
+
 import org.corfudb.runtime.CorfuRuntime;
 import org.corfudb.runtime.exceptions.DataCorruptionException;
 import org.corfudb.runtime.exceptions.OverwriteException;
@@ -16,13 +19,14 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
 import java.util.Collections;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.corfudb.infrastructure.log.StreamLogFiles.METADATA_SIZE;
 
 /**
  * Created by mwei on 12/14/15.
@@ -165,9 +169,15 @@ public class LogUnitClientTest extends
         String logFilePath = PARAMETERS.TEST_TEMP_DIR + File.separator +
                                                                 "log/0.log";
         RandomAccessFile file = new RandomAccessFile(logFilePath, "rw");
-        final long FILE_HEADER = 64;
+
+        ByteBuffer metaDataBuf = ByteBuffer.allocate(METADATA_SIZE);
+        file.getChannel().read(metaDataBuf);
+        metaDataBuf.flip();
+
+        Types.Metadata metadata = Types.Metadata.parseFrom(metaDataBuf.array());
+        final int fileOffset = Integer.BYTES + METADATA_SIZE + metadata.getLength() + 20;
         final int CORRUPT_BYTES = 0xFFFF;
-        file.seek(FILE_HEADER + 2); // File header + delimiter
+        file.seek(fileOffset); // File header + delimiter
         file.writeInt(CORRUPT_BYTES);
         file.close();
 

@@ -8,6 +8,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.corfudb.infrastructure.SequencerServerAssertions.assertThat;
+import static org.corfudb.infrastructure.ServerContext.NON_LOG_ADDR_MAGIC;
 
 /**
  * Created by mwei on 12/13/15.

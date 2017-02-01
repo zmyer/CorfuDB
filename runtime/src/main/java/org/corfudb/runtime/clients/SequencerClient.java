@@ -55,12 +55,10 @@ public class SequencerClient extends AbstractEpochedClient {
     public CompletableFuture<TokenResponse> nextToken(Set<UUID> streamIDs, long numTokens,
                                                       boolean overwrite,
                                                       boolean replexOverwrite,
-                                                      boolean txnResolution,
-                                                      long readTimestamp,
-                                                      Set<UUID> readSet) {
+                                                      TxResolutionInfo conflictInfo) {
         return sendMessageAndGetResponse(
                 CorfuMsgType.TOKEN_REQUEST.payloadMsg(new TokenRequest(numTokens, streamIDs, overwrite, replexOverwrite,
-                        txnResolution, readTimestamp, readSet)),
+                        conflictInfo)),
                 new TypeToken<CorfuPayloadMsg<TokenResponse>>() {})
                 .thenApply(CorfuPayloadMsg::getPayload);
     }

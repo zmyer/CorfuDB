@@ -6,10 +6,15 @@
 (require 'clojure.java.shell)
 (def usage "corfu_layouts, work with the Corfu layout view.
 Usage:
-  corfu_layouts -c <config> query
-  corfu_layouts -c <config> edit
+  corfu_layouts -c <config> [-e [-u <keystore> -f <keystore_password_file>] [-r <truststore> -w <truststore_password_file>]] query
+  corfu_layouts -c <config> [-e [-u <keystore> -f <keystore_password_file>] [-r <truststore> -w <truststore_password_file>]] edit
 Options:
-  -c <config>, --config <config>              Configuration string to use.
+  -c <config>, --config <config>                                                         Configuration string to use.
+  -e, --enable-tls                                                                       Enable TLS.
+  -u <keystore>, --keystore=<keystore>                                                   Path to the key store.
+  -f <keystore_password_file>, --keystore-password-file=<keystore_password_file>         Path to the file containing the key store password.
+  -r <truststore>, --truststore=<truststore>                                             Path to the trust store.
+  -w <truststore_password_file>, --truststore-password-file=<truststore_password_file>   Path to the file containing the trust store password.
   -h, --help     Show this screen.
 ")
 
@@ -17,7 +22,7 @@ Options:
 (def localcmd (.. (new Docopt usage) (parse *args)))
 
 ; Get the runtime.
-(get-runtime (.. localcmd (get "--config")))
+(get-runtime (.. localcmd (get "--config")) localcmd)
 (connect-runtime)
 (def layout-view (get-layout-view))
 
@@ -25,12 +30,14 @@ Options:
   "Install a new layout"
   [layout]
   ; For now, we start at rank 0, but we really should get the highest rank proposed
+      (.setEpoch layout (inc (.getEpoch layout)))
+      (.moveServersToEpoch layout)
   (loop [layout-rank 0]
     (when (> layout-rank -1)
       (do
-        (println (str "Trying install with rank " layout-rank))
         (recur (try
-         (do
+                 (println (str "Trying install with rank " layout-rank))
+                 (do
            (.. (get-layout-view) (updateLayout layout layout-rank))
            -1)
          (catch org.corfudb.runtime.exceptions.OutrankedException e
@@ -58,22 +65,29 @@ Options:
                              (if (.equals layout new-layout) (println "Layout not modified, exiting")
                                  ; If changes were made, check if the layout servers were modified
                                  ; if it was, we'll have to add them to the service
-                                 (if (.equals (.getLayoutServers layout) (.getLayoutServers new-layout))
-                                     ; Equal, just install the new layout
-                                     (do
-                                      (install-layout new-layout)
-                                      (println "New layout installed!"))
-                                     ; Not equal, need to:
-                                     ; (1) make sure all layout servers are bootstrapped
-                                     ; (2) install layout on all servers
-                                     (do
-                                       (doseq [server (.getLayoutServers new-layout)]
-                                       (do (get-router server)
-                                           (.bootstrapLayout (get-layout-client) new-layout)))
-                                       (install-layout new-layout)
-                                       (println "New layout installed!")
-                                     )
-                                 )
+                                 ; Do not allow the user to modify the epoch directly.
+                                 (if-not (.equals (.getEpoch layout) (.getEpoch new-layout)) (println "Epoch modification not allowed, exiting")
+                                   (if (.equals (.getLayoutServers layout) (.getLayoutServers new-layout))
+                                       ; Equal, just install the new layout
+                                       (do
+                                        (install-layout new-layout)
+                                        (println "New layout installed!"))
+                                       ; Not equal, need to:
+                                       ; (1) make sure all layout servers are bootstrapped
+                                       ; (2) install layout on all servers
+                                       (do
+                                         (doseq [server (.getLayoutServers new-layout)]
+                                         (do (get-router server localcmd)
+                                             (try
+                                               (.get (.bootstrapLayout (get-layout-client) new-layout))
+                                               (catch Exception e
+                                               (println server":" (.getMessage e))))
+                                             ))
+                                         (install-layout new-layout)
+                                         (println "New layout installed!")
+                                       )
+                                   )
+                                )
                             )
                        ))))
 
