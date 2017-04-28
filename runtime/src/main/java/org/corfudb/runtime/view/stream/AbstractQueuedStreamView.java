@@ -258,7 +258,7 @@ public abstract class AbstractQueuedStreamView extends
             context.globalPointer = prevAddress == null ? Address.NEVER_READ :
                                                 prevAddress - 1L;
             remainingUpTo(context.minResolution);
-            context.minResolution = Address.NEVER_READ;
+            context.minResolution = Address.NON_ADDRESS;
             context.globalPointer = oldPointer;
             prevAddress = context
                     .resolvedQueue.lower(context.globalPointer);
@@ -309,12 +309,12 @@ public abstract class AbstractQueuedStreamView extends
         /** The minimum global address which we have resolved this
          * stream to.
          */
-        long minResolution = Address.NEVER_READ;
+        long minResolution = Address.NON_ADDRESS;
 
         /** The maximum global address which we have resolved this
          * stream to.
          */
-        long maxResolution = Address.NEVER_READ;
+        long maxResolution = Address.NON_ADDRESS;
 
         /**
          * A priority queue of potential addresses to be read from.
@@ -342,8 +342,8 @@ public abstract class AbstractQueuedStreamView extends
         /** {@inheritDoc} */
         @Override
         void seek(long globalAddress) {
-            if (globalAddress < Address.NEVER_READ) {
-                throw new IllegalArgumentException("globalAddress must be >= Address.NEVER_READ");
+            if (Address.nonAddress(globalAddress)) {
+                throw new IllegalArgumentException("illegal globalAddress");
             }
             log.trace("Seek[{}]({}), min={} max={}", this,  globalAddress, minResolution, maxResolution);
             // Update minResolution if necessary

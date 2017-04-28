@@ -159,7 +159,7 @@ public class ReplexStreamView extends
         doPendingSeek(getCurrentContext(), Address.MAX);
 
         // If never read or only one entry, return null
-        if (getCurrentContext().streamPointer == Address.NEVER_READ ||
+        if (getCurrentContext().streamPointer <  Address.getMinAddress() ||
                 getCurrentContext().streamPointer == 0)
         return null;
 
@@ -174,7 +174,9 @@ public class ReplexStreamView extends
     /** {@inheritDoc} */
     @Override
     public ILogData current() {
-        if (getCurrentContext().streamPointer > Address.NEVER_READ) {
+        // TODO this code is beyond repair; I am just making it -compile- for
+        // now. argh.
+        if (getCurrentContext().streamPointer >= Address.getMinAddress()) {
             getCurrentContext().streamPointer--;
         }
         return next();

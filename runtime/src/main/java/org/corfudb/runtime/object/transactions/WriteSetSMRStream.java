@@ -104,16 +104,34 @@ public class WriteSetSMRStream implements ISMRStream {
     void mergeTransaction() {
         contexts.remove(contexts.size()-1);
         if (currentContext == contexts.size()) {
-            // recalculate the pos based on the write pointer
-            long readPos = Address.NEVER_READ;
+
+            // recalculate the context-pos based on the writePos
+            //
+            // we need to find the relative context-position within the
+            // newly-popped context stack.
+            //
+            // For example,
+            // if there are 5 contexts,
+            // each has write-set of size 10,
+            // and writepos = 45
+            // then the relative context-position of the last context is 5
+            // (that is, we subtract 40 from write-pos).
+            //
+
+            long contextStackPos = 0L;
             for (int i = 0; i < contexts.size(); i++) {
-                readPos += contexts.get(i).getWriteSetEntryList(id).size();
-                if (readPos >= writePos) {
-                    currentContextPos = contexts.get(i).getWriteSetEntryList(id).size()
-                                        - (writePos - readPos) - 1;
-                }
+                // this loop stops when we get to the right context
+                // TODO: assert that i == contexts.size()-1??
+                if (contextStackPos + contexts.get(i).getWriteSetEntryList(id).size
+                        () >= writePos)
+                    break;
             }
+
+            // now, simply take writePos modulo the sum of the context-stack
+            currentContextPos = writePos - contextStackPos;
+
             currentContext--;
+
         }
     }
 
@@ -158,25 +176,27 @@ public class WriteSetSMRStream implements ISMRStream {
 
     @Override
     public List<SMREntry> previous() {
+
+        if (Address.nonAddress(writePos))
+            return null;
+
+        // check if we already back-stepped beyond the start point;
+        if (writePos < Address.getMinAddress())
+            return null;
+
         writePos--;
 
-        if (writePos <= Address.NEVER_READ) {
-            writePos = Address.NEVER_READ;
-            return null;
-        }
-
-        currentContextPos--;
         // Pop the context if we're at the beginning of it
-        if (currentContextPos <= Address.NEVER_READ) {
+        if (Address.isMinAddress(currentContextPos)) {
             if (currentContext == 0) {
+                currentContextPos = Address.NON_ADDRESS;
                 throw new RuntimeException("Attempted to pop first context (pos=" + pos() + ")");
             }
             else {
                 currentContext--;
+                currentContextPos = contexts.get(currentContext)
+                        .getWriteSet().get(id).getValue().size() - 1;
             }
-
-            currentContextPos = contexts.get(currentContext)
-                    .getWriteSet().get(id).getValue().size() - 1;
         }
         return current();
     }
@@ -188,9 +208,9 @@ public class WriteSetSMRStream implements ISMRStream {
 
     @Override
     public void reset() {
-        writePos = Address.NEVER_READ;
+        writePos = Address.NON_ADDRESS;
         currentContext = 0;
-        currentContextPos = Address.NEVER_READ;
+        currentContextPos = Address.NON_ADDRESS;
     }
 
     @Override
