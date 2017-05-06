@@ -85,6 +85,15 @@ public class WriteSetSMRStream implements ISMRStream {
      *          False otherwise.
      */
     public boolean isStreamCurrentContextThreadCurrentContext() {
+        log.debug("OPT-STREAM[{}] TX-CTXT[{},cur={}] TX-THREAD[{},cur={}] " +
+                        "rollback={}",
+                Utils.toReadableID(id),
+                contexts.get(0), currentContext,
+                TransactionalContext.getRootContext(), TransactionalContext
+                        .getTransactionStack().size() - 1,
+                        !contexts.get
+                        (currentContext)
+                        .equals(TransactionalContext.getCurrentContext()));
         return contexts.get(currentContext)
                 .equals(TransactionalContext.getCurrentContext());
     }
@@ -137,6 +146,8 @@ public class WriteSetSMRStream implements ISMRStream {
                     .getWriteSetEntryList(id);
             long readContextStart = i == currentContext ? currentContextPos + 1: 0;
             for (long j = readContextStart; j < writeSet.size(); j++) {
+                log.debug("OPT-STREAM[{}] next pos={}",
+                        Utils.toReadableID(id), pos());
                 entryList.add(writeSet.get((int) j));
                 writePos++;
             }
@@ -164,6 +175,10 @@ public class WriteSetSMRStream implements ISMRStream {
     @Override
     public List<SMREntry> previous() {
         writePos--;
+
+        log.debug("OPT-STREAM[{}] prev pos={}",
+                Utils.toReadableID(id), pos());
+
 
         if (writePos <= Address.maxNonAddress()) {
             writePos = Address.maxNonAddress();
