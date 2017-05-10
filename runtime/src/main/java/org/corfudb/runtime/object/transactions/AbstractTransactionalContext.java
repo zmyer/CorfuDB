@@ -9,6 +9,7 @@ import org.corfudb.protocols.logprotocol.MultiSMREntry;
 import org.corfudb.protocols.logprotocol.SMREntry;
 import org.corfudb.runtime.exceptions.TransactionAbortedException;
 import org.corfudb.runtime.object.*;
+import org.corfudb.runtime.view.Address;
 import org.corfudb.runtime.view.Layout;
 import org.corfudb.util.Utils;
 
@@ -254,12 +255,7 @@ public abstract class AbstractTransactionalContext implements
     }
 
     int getWriteSetEntrySize(UUID id) {
-        List<SMREntry> entries = getWriteSetInfo().getWriteSet().getSMRUpdates(id);
-
-        if (entries == null)
-            return 0;
-        else
-            return entries.size();
+        return getWriteSetInfo().getWriteSetSize(id);
     }
 
     /** Transactions are ordered by their snapshot timestamp. */
@@ -319,13 +315,49 @@ class WriteSetInfo {
     // the set of mutated objects
     Set<UUID> affectedStreams = new HashSet<>();
 
-    // teh actual updates to mutated objects
+    // the actual updates to mutated objects
     MultiObjectSMREntry writeSet = new MultiObjectSMREntry();
+
+    // in-memory object state
+    Map<UUID, Long> currentPos = new HashMap<>();
 
     Set<Integer> getConflictSet(UUID streamID) {
         return getWriteSetConflicts().computeIfAbsent(streamID, u -> {
             return new HashSet<>();
         } );
+    }
+
+    Long getPosition(UUID streamID) {
+        return currentPos.computeIfAbsent(streamID, u -> {
+            return Address.NEVER_READ;
+        });
+    }
+
+    public void nextPosition(UUID streamID) {
+        currentPos.compute(streamID, (u, pos) -> {
+            pos++;
+            if (pos >= getWriteSetSize(streamID))
+                pos = Address.NEVER_READ;
+            return pos;
+        });
+    }
+
+    public void prevPosition(UUID streamID) {
+        currentPos.compute(streamID, (u, pos) -> {
+            if (Address.isAddress(pos))
+                pos--;
+            return pos;
+        });
+    }
+
+    public int getWriteSetSize(UUID streamID) {
+        List<SMREntry> entries = getWriteSet().getSMRUpdates(streamID);
+
+        if (entries == null)
+            return 0;
+        else
+            return entries.size();
+
     }
 
     public void mergeInto(WriteSetInfo other) {
@@ -336,8 +368,17 @@ class WriteSetInfo {
                 getConflictSet(streamID).addAll(cSet);
             });
 
+            // update object's position relative to merged write-set
+            other.getCurrentPos().forEach((streamID, newPos) -> {
+                getCurrentPos().compute(streamID, (u, oldPos) -> {
+                    return newPos == Address.NEVER_READ ? oldPos :
+                            newPos + getWriteSetSize(streamID);
+                });
+            });
+
             // copy all the writeSet SMR entries
             writeSet.mergeInto(other.getWriteSet());
+
         }
     }
 

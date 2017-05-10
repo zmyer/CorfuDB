@@ -170,6 +170,7 @@ public class WriteSetSMRStream implements ISMRStream {
             return null;
         }
 
+        TransactionalContext.
         currentContextPos--;
         // Pop the context if we're at the beginning of it
         if (currentContextPos <= Address.maxNonAddress()) {
