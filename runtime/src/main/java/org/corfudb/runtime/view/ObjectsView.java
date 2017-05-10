@@ -130,7 +130,7 @@ public class ObjectsView extends AbstractView {
                     context.getTransactionID(), context.getSnapshotTimestamp());
             context.abortTransaction(new TransactionAbortedException(
                     txInfo, null, AbortCause.USER));
-            TransactionalContext.removeContext();
+            TransactionalContext.foldTXContext();
         }
     }
 
@@ -166,7 +166,7 @@ public class ObjectsView extends AbstractView {
                 try {
                     return TransactionalContext.getCurrentContext().commitTransaction();
                 } finally {
-                    TransactionalContext.removeContext();
+                    TransactionalContext.foldTXContext();
                 }
         }
     }

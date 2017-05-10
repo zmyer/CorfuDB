@@ -37,6 +37,6 @@ public class TransactionBuilder {
      * to the builder.
      */
     public void begin() {
-        TransactionalContext.newContext(type.get.apply(this));
+        TransactionalContext.getNewTXContext(type.get.apply(this));
     }
 }

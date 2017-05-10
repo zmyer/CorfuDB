@@ -205,6 +205,40 @@ public class UndoTest extends AbstractTransactionsTest {
     }
 
     @Test
+    public void ckRollbackNestedAbort() {
+        Map<Integer, Integer> map = (Map<Integer, Integer>) instantiateCorfuObject(
+                new TypeToken<SMRMap<Integer, Integer>>() {}, "test stream");
+
+        final int nesting = 2; // PARAMETERS.NUM_ITERATIONS_VERY_LOW;
+        final int nkeys = 2; // PARAMETERS.NUM_ITERATIONS_VERY_LOW
+
+        TXBegin();
+        for (int i = 0; i < nkeys; i++)
+            map.put(i, i);
+
+        for (int nestLevel = 0; nestLevel < nesting; nestLevel++) {
+            TXBegin();
+            for (int j = 0; j < nkeys; j++)
+                map.put(j, nestLevel);
+        }
+
+        for (int nestLevel = nesting-1; nestLevel >= 0; nestLevel--) {
+//            for (int i = 0; i < nkeys; i++)
+//                assertThat(map.get(i))
+//                        .isEqualTo(nestLevel);
+            TXAbort();
+        }
+
+        TXEnd();
+
+        for (int i = 0; i < nkeys; i++)
+            assertThat(map.get(i))
+                    .isEqualTo(i);
+
+
+    }
+
+    @Test
     public void ckRollbackToRightPlace()
             throws Exception {
         Map<Integer, String> testMap = getRuntime()

@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * This class demonstrates transactions with write-write isolation level.
  *
- * By default, Corfu transaction wrapped between TXBegin()/TXEnd() guarantee serializabilty.
+ * By default, Corfu transaction wrapped between getNewTXContext()/TXEnd() guarantee serializabilty.
  * The other supported isolation levels are:
  *   - write-write: Check that modification by this transaction do not overwrite concurrent modifications
  *   - snapshot: Always commits, only guarantees execution against a consistent snapshot
@@ -21,10 +21,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  * By default, the snapshot time of a transaction is the time of its first object accessor.
  * Corfu supports explicitly designating snapshot time (a log offset, which is returned by object mutators).
  *
- * Below, the utilitiy method {@link WriteWriteTXs ::TXBegin()} illustrates how to replace TXBegin()
+ * Below, the utilitiy method {@link WriteWriteTXs ::getNewTXContext()} illustrates how to replace getNewTXContext()
  * with a transasction-builder indicating write-write isolation.
  *
- * The utility method {@link WriteWriteTXs ::TXBegin(long snapTime)} illustrates how to additionally set
+ * The utility method {@link WriteWriteTXs ::getNewTXContext(long snapTime)} illustrates how to additionally set
  * a transasction snapshot-time to a specific position.
  *
  * Created by dalia on 12/30/16.
@@ -46,7 +46,7 @@ public class WriteWriteTXs extends BaseCorfuAppUtils {
     private final int TOTAL_PERCENT = 100;
 
     /**
-     * This overrides TXBegin in order to set the transaction type to WRITE_AFTER_WRITE
+     * This overrides getNewTXContext in order to set the transaction type to WRITE_AFTER_WRITE
      */
     @Override
     protected void TXBegin() {
@@ -56,7 +56,7 @@ public class WriteWriteTXs extends BaseCorfuAppUtils {
     }
 
     /**
-     * This variant of TXBegin sets a snapshot-point,
+     * This variant of getNewTXContext sets a snapshot-point,
      * as well as sets the transaction type to WRITE_AFTER_WRITE
      */
     protected void TXBegin(long snapTime) {
@@ -244,7 +244,7 @@ public class WriteWriteTXs extends BaseCorfuAppUtils {
 
         for (int i = 0; i < NUM_BATCHES; i++) synchronized (map1) {
             System.out.print(".");
-            TXBegin(snapTime);          // use the snapshot we kept as the starting snapshot
+            getNewTXContext(snapTime);          // use the snapshot we kept as the starting snapshot
             int accumulator = 0;
             for (int j = 0; j < BATCH_SZ; j++) {
 

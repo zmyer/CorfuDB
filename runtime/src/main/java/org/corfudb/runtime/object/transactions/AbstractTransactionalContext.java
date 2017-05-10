@@ -1,21 +1,17 @@
 package org.corfudb.runtime.object.transactions;
 
-import com.google.common.collect.ImmutableMap;
 import lombok.Getter;
 
 import lombok.extern.slf4j.Slf4j;
 import org.corfudb.protocols.logprotocol.MultiObjectSMREntry;
-import org.corfudb.protocols.logprotocol.MultiSMREntry;
 import org.corfudb.protocols.logprotocol.SMREntry;
 import org.corfudb.runtime.exceptions.TransactionAbortedException;
 import org.corfudb.runtime.object.*;
 import org.corfudb.runtime.view.Address;
-import org.corfudb.runtime.view.Layout;
 import org.corfudb.util.Utils;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 import static org.corfudb.runtime.object.transactions.TransactionalContext.getRootContext;
 
@@ -124,7 +120,7 @@ public abstract class AbstractTransactionalContext implements
 
         parentContext = TransactionalContext.getCurrentContext();
 
-        AbstractTransactionalContext.log.debug("TXBegin[{}]", this);
+        AbstractTransactionalContext.log.debug("getNewTXContext[{}]", this);
     }
 
     /** Access the state of the object.
@@ -318,36 +314,10 @@ class WriteSetInfo {
     // the actual updates to mutated objects
     MultiObjectSMREntry writeSet = new MultiObjectSMREntry();
 
-    // in-memory object state
-    Map<UUID, Long> currentPos = new HashMap<>();
-
     Set<Integer> getConflictSet(UUID streamID) {
         return getWriteSetConflicts().computeIfAbsent(streamID, u -> {
             return new HashSet<>();
         } );
-    }
-
-    Long getPosition(UUID streamID) {
-        return currentPos.computeIfAbsent(streamID, u -> {
-            return Address.NEVER_READ;
-        });
-    }
-
-    public void nextPosition(UUID streamID) {
-        currentPos.compute(streamID, (u, pos) -> {
-            pos++;
-            if (pos >= getWriteSetSize(streamID))
-                pos = Address.NEVER_READ;
-            return pos;
-        });
-    }
-
-    public void prevPosition(UUID streamID) {
-        currentPos.compute(streamID, (u, pos) -> {
-            if (Address.isAddress(pos))
-                pos--;
-            return pos;
-        });
     }
 
     public int getWriteSetSize(UUID streamID) {
@@ -360,20 +330,19 @@ class WriteSetInfo {
 
     }
 
+    /**
+     * When a nested TX is committed,
+     * this method is invoked to fold the stream-position information into
+     * the parent TX (this)
+     *
+     * @param other the nested TX
+     */
     public void mergeInto(WriteSetInfo other) {
         synchronized (getRootContext().getTransactionID()) {
 
             // copy all the conflict-params
             other.writeSetConflicts.forEach((streamID, cSet) ->{
                 getConflictSet(streamID).addAll(cSet);
-            });
-
-            // update object's position relative to merged write-set
-            other.getCurrentPos().forEach((streamID, newPos) -> {
-                getCurrentPos().compute(streamID, (u, oldPos) -> {
-                    return newPos == Address.NEVER_READ ? oldPos :
-                            newPos + getWriteSetSize(streamID);
-                });
             });
 
             // copy all the writeSet SMR entries

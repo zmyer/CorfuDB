@@ -200,7 +200,7 @@ public class CorfuSMRObjectProxyTest extends AbstractObjectTest {
         for(int x = 0; x < PARAMETERS.NUM_ITERATIONS_LOW; x++) {
             // thread 1: update "a" and "b" atomically
             Thread t1 = new Thread(() -> {
-                runtime.getObjectsView().TXBegin();
+                runtime.getObjectsView().getNewTXContext();
                 map.put("a", 1);
                 map.put("b", 1);
                 runtime.getObjectsView().TXEnd();

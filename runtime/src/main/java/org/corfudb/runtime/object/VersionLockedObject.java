@@ -10,6 +10,8 @@ import org.corfudb.util.Utils;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.concurrent.locks.StampedLock;
 import java.util.function.*;
 
@@ -61,7 +63,8 @@ public class VersionLockedObject<T> {
      * the object. Any access to unsafe methods should
      * obtain the lock.
      */
-    private final StampedLock lock;
+//    private final StampedLock lock;
+    private ReadWriteLock lock;
 
     /** The stream view this object is backed by.
      *
@@ -108,7 +111,7 @@ public class VersionLockedObject<T> {
         this.pendingUpcalls = new ConcurrentSet<>();
         this.upcallResults = new ConcurrentHashMap<>();
 
-        lock = new StampedLock();
+        lock = new ReentrantReadWriteLock();
     }
 
     /** Access the internal state of the object, trying first to optimistically access
@@ -142,43 +145,29 @@ public class VersionLockedObject<T> {
                         Function<T, R> accessFunction) {
         // First, we try to do an optimistic read on the object, in case it
         // meets the conditions for direct access.
-        long ts = lock.tryOptimisticRead();
-        if (ts != 0) {
-            if (directAccessCheckFunction.apply(this)) {
-                log.trace("Access [{}] Direct (optimistic-read) access at {}", this, getVersionUnsafe());
-                try {
-                    R ret = accessFunction.apply(object);
-                    if (lock.validate(ts)) {
-                        return ret;
-                    }
-                } catch (Exception e) {
-                    // If we have an exception, we didn't get a chance to validate the the lock.
-                    // If it's still valid, then we should re-throw the exception since it was
-                    // on a correct view of the object.
-                    if (lock.validate(ts)) {
-                        throw e;
-                    }
-                    // Otherwise, it is not on a correct view of the object (the object was
-                    // modified) and we should try again by upgrading the lock.
-                    log.trace("Access [{}] Direct (optimistic-read) exception, upgrading lock", this);
-                }
+        lock.readLock().lock();
+        // check again, under read lock
+        if (directAccessCheckFunction.apply(this)) {
+            log.trace("Access [{}] Direct (optimistic-read) access at {}", this, getVersionUnsafe());
+            try {
+                R ret = accessFunction.apply(object);
+                return ret;
+            } finally {
+                lock.readLock().unlock();
             }
-        }
+        } else
+            lock.readLock().unlock();
+
         // Next, we just upgrade to a full write lock if the optimistic
         // read fails, since it means that the state of the object was
         // updated.
         try {
-            // Attempt an upgrade
-            ts = lock.tryConvertToWriteLock(ts);
-            // Upgrade failed, try conversion again
-            if (ts == 0) { ts = lock.writeLock(); }
+            lock.writeLock().lock();
             // Check if direct access is possible (unlikely).
             if (directAccessCheckFunction.apply(this)) {
                 log.trace("Access [{}] Direct (writelock) access at {}", this, getVersionUnsafe());
                 R ret = accessFunction.apply(object);
-                if (lock.validate(ts)) {
-                    return ret;
-                }
+                return ret;
             }
             // If not, perform the update operations
             updateFunction.accept(this);
@@ -186,7 +175,7 @@ public class VersionLockedObject<T> {
             return accessFunction.apply(object);
             // And perform the access
         } finally {
-            lock.unlock(ts);
+            lock.writeLock().unlock();
         }
     }
 
@@ -197,13 +186,12 @@ public class VersionLockedObject<T> {
      * @return                  The return value of the update function.
      */
     public <R> R update(Function<VersionLockedObject<T>, R> updateFunction) {
-        long ts = 0;
         try {
-            ts = lock.writeLock();
+            lock.writeLock().lock();
             log.trace("Update[{}] (writelock)", this);
             return updateFunction.apply(this);
         } finally {
-            lock.unlock(ts);
+            lock.writeLock().unlock();
         }
     }
 

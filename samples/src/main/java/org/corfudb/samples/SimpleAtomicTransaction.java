@@ -52,10 +52,10 @@ import java.util.Map;
      "... 3 time ..."
 
  * In order to enforce a consistent behavior, Corfu provides support for ACID transactions.
- * A transaction is a body of code wrapped with `TXBegin()` and `TXEnd()`.
+ * A transaction is a body of code wrapped with `getNewTXContext()` and `TXEnd()`.
  * For example, in the code below, we will wrap the code above with a transaction block:
 
-     corfuRuntime.getObjectsView().TXBegin();
+     corfuRuntime.getObjectsView().getNewTXContext();
      Integer previous = map.get("a");
      if (previous == null) {
          System.out.println("This is the first time we were run!");
