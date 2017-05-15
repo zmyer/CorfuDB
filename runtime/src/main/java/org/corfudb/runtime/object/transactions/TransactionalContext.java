@@ -1,5 +1,7 @@
 package org.corfudb.runtime.object.transactions;
 
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.corfudb.protocols.logprotocol.SMREntry;
 import org.corfudb.runtime.view.Address;
@@ -104,14 +106,26 @@ public class TransactionalContext {
      *          and also adjust the stream index to the next entry.
      */
     public static SMREntry
-    next(UUID streamID, AtomicReference<Long> lastPos) {
+    next(UUID streamID, PositionTracker lastPos) {
+        long tempPos = lastPos.getPos()+1;
 
+        SMREntry ret = findEntryByPosition(streamID, tempPos);
+        if (ret == null)
+            return null;
 
+        // increment the position
+        lastPos.setPos(tempPos);
+
+        // update the SMR entry
+        lastPos.setEntry(ret);
+        return ret;
+    }
+
+    public static SMREntry findEntryByPosition(UUID streamID, long tempPos) {
+        long pos = 0;
+        boolean hasNext = false;
         Iterator<AbstractTransactionalContext> iterator = getTransactionStack().descendingIterator();
         AbstractTransactionalContext ctxt = null;
-
-        long pos = 0, tempPos = lastPos.get()+1;
-        boolean hasNext = false;
 
         while (iterator.hasNext()) {
             ctxt = iterator.next();
@@ -130,25 +144,42 @@ public class TransactionalContext {
             return null;
         }
 
-        // increment the position
-        lastPos.set(tempPos);
-
-        // get the relative position within the TX cotext
-        tempPos -= pos;
-
         // retrieve the SMR entry
-        return ctxt.getWriteSetEntryList(streamID).get((int)tempPos);
+        return ctxt
+                .getWriteSetEntryList(streamID)
+                .get((int)tempPos);
+
     }
 
+    static public void
+    prev(UUID streamID, PositionTracker lastPos) {
+        long tempPos = lastPos.getPos()-1;
 
-        /**
-         * Get the transaction stack as a list.
-         * @return  The transaction stack as a list.
-         */
+        SMREntry ret = findEntryByPosition(streamID, tempPos);
+        if (ret == null)
+            return;
+
+        // decrement the position
+        lastPos.setPos(tempPos);
+
+        // update the SMR entry
+        lastPos.setEntry(ret);
+    }
+
+    /**
+     * Get the transaction stack as a list.
+     * @return  The transaction stack as a list.
+     */
     public static List<AbstractTransactionalContext> getTransactionStackAsList() {
         List<AbstractTransactionalContext> listReverse =
                 getTransactionStack().stream().collect(Collectors.toList());
         Collections.reverse(listReverse);
         return listReverse;
     }
+}
+
+@Getter @Setter
+class PositionTracker {
+    long pos = Address.NEVER_READ;
+    SMREntry entry;
 }

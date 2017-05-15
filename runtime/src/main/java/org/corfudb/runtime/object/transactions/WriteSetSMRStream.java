@@ -58,7 +58,7 @@ import java.util.stream.Stream;
 public class WriteSetSMRStream implements ISMRStream {
 
     // the last position in the relevant TX stack which has been applied
-    AtomicReference<Long> lastPos = new AtomicReference<Long>(Address.NEVER_READ);
+    PositionTracker lastPos = new PositionTracker();
 
     // the list of SMREntries which have been applied optimistically;
     // it is used for optimistic rollback
@@ -183,9 +183,9 @@ public class WriteSetSMRStream implements ISMRStream {
             optUpdates.push(entry);
             entryLinkedList.add(entry);
         }
-        if (lastPos.get() != writePos)
-            log.warn("SMRstream[{}] NEXT writePos={} != lastPos={}", id, writePos, lastPos.get());
-        log.debug("SMRstream[{}] NEXT writePos={} lastPos={}", id, writePos, lastPos.get());
+        if (lastPos.getPos() != writePos)
+            log.warn("SMRstream[{}] NEXT writePos={} != lastPos={}", id, writePos, lastPos.getPos());
+        log.debug("SMRstream[{}] NEXT writePos={} lastPos={}", id, writePos, lastPos.getPos());
         /**/
 
         //return entryList;
@@ -232,10 +232,11 @@ public class WriteSetSMRStream implements ISMRStream {
         }
 
         optUpdates.pop();
-        lastPos.set(lastPos.get()-1);
-        log.debug("SMRStream[{}]  PREV lastPos={}", id, lastPos);
-        if (writePos != lastPos.get())
-            log.warn("SMRStream[{}]  PREV writePos={} lastPos={}", writePos, lastPos);
+        TransactionalContext.prev(id, lastPos);
+        log.debug("SMRStream[{}]  PREV lastPos={}", this, lastPos.getPos());
+        if (writePos != lastPos.getPos())
+            log.warn("SMRStream[{}]  PREV writePos={} lastPos={}",
+                    this, writePos, lastPos.getPos());
 
         SMREntry ent = optUpdates.peek();
         if (ent != current().get(0))
@@ -247,13 +248,13 @@ public class WriteSetSMRStream implements ISMRStream {
 
     @Override
     public long pos() {
-        return lastPos.get();
+        return lastPos.getPos();
         //return writePos;
     }
 
     @Override
     public void reset() {
-        lastPos.set(Address.NEVER_READ);
+        lastPos.setPos(Address.NEVER_READ);
         writePos = Address.maxNonAddress();
         currentContext = 0;
         currentContextPos = Address.maxNonAddress();
