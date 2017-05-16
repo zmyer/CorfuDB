@@ -511,7 +511,7 @@ public class ManagementViewTest extends AbstractViewTest {
         // and then resume the transaction above; it should abort
         // (unnecessarily, but we are being conservative)
         //
-        induceSequencerFailureAndWait();
+       induceSequencerFailureAndWait();
         t(0, () -> {
             boolean commit = true;
             map.put(nUpdates+1, payload); // should not conflict

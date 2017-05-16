@@ -139,15 +139,14 @@ public class TransactionalContext {
                 pos += ctxt.getWriteSetEntrySize(streamID);
             }
         }
-        if (!hasNext) {
-            // todo: check that we have exactly lastPos+1 entries in the stream?
+        if (!hasNext || (tempPos - pos) < 0) {
             return null;
         }
 
         // retrieve the SMR entry
         return ctxt
                 .getWriteSetEntryList(streamID)
-                .get((int)tempPos);
+                .get((int) (tempPos - pos));
 
     }
 
@@ -156,14 +155,26 @@ public class TransactionalContext {
         long tempPos = lastPos.getPos()-1;
 
         SMREntry ret = findEntryByPosition(streamID, tempPos);
-        if (ret == null)
-            return;
 
         // decrement the position
         lastPos.setPos(tempPos);
 
         // update the SMR entry
         lastPos.setEntry(ret);
+    }
+
+    /**
+     * This
+     */
+    static public boolean
+    isPositionTrackerAtTail(UUID streamID, PositionTracker pos) {
+        AbstractTransactionalContext ctxt = getTransactionStack().peekFirst();
+
+        if (ctxt.getWriteSetEntrySize(streamID) == 0)
+            return (pos.getEntry() == null);
+
+        return pos.getEntry() == ctxt.getWriteSetEntryList(streamID)
+                .get(ctxt.getWriteSetEntrySize(streamID)-1) ;
     }
 
     /**

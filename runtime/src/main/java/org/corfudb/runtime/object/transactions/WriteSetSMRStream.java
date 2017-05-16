@@ -88,9 +88,7 @@ public class WriteSetSMRStream implements ISMRStream {
         reset();
 
         this.TXid = contexts.get(0).getTransactionID();
-        log.debug("OPT-STREAM[{}] init for TX={}",
-                Utils.toReadableID(id),
-                Utils.toReadableID(TXid));
+        log.debug("INIT[{}]", this);
     }
 
     /** Return whether stream current transaction is the thread current transaction.
@@ -102,8 +100,16 @@ public class WriteSetSMRStream implements ISMRStream {
      *          False otherwise.
      */
     public boolean isStreamCurrentContextThreadCurrentContext() {
-        return contexts.get(currentContext)
+        boolean b1, b2;
+
+        b1 = TransactionalContext.isPositionTrackerAtTail(id,
+                lastPos);
+        b2 = contexts.get(currentContext)
                 .equals(TransactionalContext.getCurrentContext());
+        if (b1 != b2)
+            log.warn("TAIL[{}] position tracker {} != current {}", this, b1,
+                    b2);
+        return b2;
     }
 
     /** Return whether we are the stream for this current thread
@@ -184,8 +190,10 @@ public class WriteSetSMRStream implements ISMRStream {
             entryLinkedList.add(entry);
         }
         if (lastPos.getPos() != writePos)
-            log.warn("SMRstream[{}] NEXT writePos={} != lastPos={}", id, writePos, lastPos.getPos());
-        log.debug("SMRstream[{}] NEXT writePos={} lastPos={}", id, writePos, lastPos.getPos());
+            log.warn("NEXT[{}] writePos={} != lastPos={}", this,
+                    writePos, lastPos.getPos());
+        log.debug("NEXT[{}] writePos={} lastPos={}", this, writePos,
+                lastPos.getPos());
         /**/
 
         //return entryList;
@@ -209,6 +217,8 @@ public class WriteSetSMRStream implements ISMRStream {
     public List<SMREntry> previous() {
         writePos--;
 
+        TransactionalContext.prev(id, lastPos); // new
+
         if (writePos <= Address.maxNonAddress()) {
             writePos = Address.maxNonAddress();
             return null;
@@ -231,16 +241,16 @@ public class WriteSetSMRStream implements ISMRStream {
                     .getWriteSetEntrySize(id)-1 ;
         }
 
+        // new
         optUpdates.pop();
-        TransactionalContext.prev(id, lastPos);
-        log.debug("SMRStream[{}]  PREV lastPos={}", this, lastPos.getPos());
+        log.debug("PREV[{}] lastPos={}", this, lastPos.getPos());
         if (writePos != lastPos.getPos())
-            log.warn("SMRStream[{}]  PREV writePos={} lastPos={}",
+            log.warn("PREV[{}]  writePos={} lastPos={}",
                     this, writePos, lastPos.getPos());
 
         SMREntry ent = optUpdates.peek();
         if (ent != current().get(0))
-            log.warn("SMRStream[{}]  PREV ent != current", id, ent, current());
+            log.warn("PREV[{}] ent != current", id, ent, current());
 
 //        return current();
         return Collections.singletonList(ent);
@@ -248,6 +258,8 @@ public class WriteSetSMRStream implements ISMRStream {
 
     @Override
     public long pos() {
+        log.debug("POS[{}] writePos={} lastPos={}",this, writePos, lastPos
+                .getPos());
         return lastPos.getPos();
         //return writePos;
     }
@@ -290,6 +302,7 @@ public class WriteSetSMRStream implements ISMRStream {
 
     @Override
     public String toString() {
-        return "WSSMRStream[" + Utils.toReadableID(getID()) +"]";
+        return Utils.toReadableID(getID()) + "," +
+                "TX=" + Utils.toReadableID(TXid) ;
     }
 }

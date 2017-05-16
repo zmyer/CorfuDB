@@ -226,6 +226,37 @@ public class VersionLockedObject<T> {
      * @param timestamp         The timestamp to update the object to.
      */
     public void syncObjectUnsafe(long timestamp) {
+
+        /*
+        // If there is an optimistic stream for another
+        // transaction, remove it by rolling it back first
+        if (!optimisticallyOwnedByThreadUnsafe()) {
+            if (this.optimisticStream != null) {
+                optimisticRollbackUnsafe();
+                this.optimisticStream = null;
+            }
+        }
+
+        // If we are too far ahead, roll back to the past
+        if (getVersionUnsafe() > timestamp) {
+            try {
+                rollbackObjectUnsafe(timestamp);
+            } catch (NoRollbackException nre) {
+                resetUnsafe();
+            }
+        }
+
+        // Now sync the regular log
+        syncStreamUnsafe(smrStream, timestamp);
+
+        // finally, sync the optimistic stream, if exists
+        if (optimisticallyOwnedByThreadUnsafe())
+            syncStreamUnsafe(optimisticStream, Address.OPTIMISTIC);
+
+        return;
+        */
+
+        /**/
         // If there is an optimistic stream attached,
         // and it belongs to this thread use that
         if (optimisticallyOwnedByThreadUnsafe()) {
@@ -237,12 +268,18 @@ public class VersionLockedObject<T> {
                 if (getVersionUnsafe() > timestamp) {
                     try {
                         rollbackObjectUnsafe(timestamp);
+                        if (optimisticStream !=currentOptimisticStream)
+                            log.warn("foo");
                     } catch (NoRollbackException nre) {
                         resetUnsafe();
+                        if (optimisticStream !=currentOptimisticStream)
+                            log.warn("bar");
                     }
                 }
                 // Now sync the regular log
                 syncStreamUnsafe(smrStream, timestamp);
+                if (optimisticStream !=currentOptimisticStream)
+                    log.warn("hop");
                 // It's possible that due to reset,
                 // the optimistic stream is no longer
                 // present. Restore it.
@@ -271,6 +308,7 @@ public class VersionLockedObject<T> {
             }
             syncStreamUnsafe(smrStream, timestamp);
         }
+        /**/
     }
 
     /** Log an update to this object, noting a request to save the
