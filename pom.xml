@@ -17,6 +17,7 @@
         <module>samples</module>
         <module>logReader</module>
         <module>debian</module>
+        <module>integrationFramework</module>
     </modules>
 
     <packaging>pom</packaging>
