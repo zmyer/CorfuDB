@@ -78,7 +78,10 @@ public class CheckpointEntry extends LogEntry {
     @Getter
     UUID checkpointID;
 
-    /** Author/cause/trigger of this checkpoint.
+    @Getter
+    UUID streamID;
+
+    /** Author/cause/trigger of this checkpoint
      */
     @Deprecated // TODO: Add replacement method that conforms to style
     @SuppressWarnings("checkstyle:abbreviation") // Due to deprecation
@@ -107,13 +110,13 @@ public class CheckpointEntry extends LogEntry {
     @Getter
     int smrEntriesBytes = 0;
 
-    /** CheckpointEntry constructor. */
-    public CheckpointEntry(CheckpointEntryType type, String authorId, UUID checkpointId,
-                           Map<CheckpointDictKey,String> dict, MultiSMREntry smrEntries) {
+    public CheckpointEntry(CheckpointEntryType type, String authorID, UUID checkpointID,
+                           UUID streamID, Map<CheckpointDictKey,String> dict, MultiSMREntry smrEntries) {
         super(LogEntryType.CHECKPOINT);
         this.cpType = type;
-        this.checkpointID = checkpointId;
-        this.checkpointAuthorID = authorId;
+        this.checkpointID = checkpointID;
+        this.streamID = streamID;
+        this.checkpointAuthorID = authorID;
         this.dict = dict;
         this.smrEntries = smrEntries;
     }
@@ -131,6 +134,7 @@ public class CheckpointEntry extends LogEntry {
         super.deserializeBuffer(b, rt);
         cpType = CheckpointEntryType.typeMap.get(b.readByte());
         checkpointID = new UUID(b.readLong(), b.readLong());
+        streamID = new UUID(b.readLong(), b.readLong());
         checkpointAuthorID = deserializeString(b);
         dict = new HashMap<>();
         short mapEntries = b.readShort();
@@ -161,6 +165,8 @@ public class CheckpointEntry extends LogEntry {
         b.writeByte(cpType.asByte());
         b.writeLong(checkpointID.getMostSignificantBits());
         b.writeLong(checkpointID.getLeastSignificantBits());
+        b.writeLong(streamID.getMostSignificantBits());
+        b.writeLong(streamID.getLeastSignificantBits());
         serializeString(checkpointAuthorID, b);
         b.writeShort(dict == null ? 0 : dict.size());
         if (dict != null) {

@@ -22,6 +22,7 @@ import lombok.Value;
 
 import org.corfudb.protocols.logprotocol.CheckpointEntry;
 
+import static org.corfudb.protocols.wireprotocol.IMetadata.LogUnitMetadataType.CHECKPOINTED_STREAM_ID;
 import static org.corfudb.protocols.wireprotocol.IMetadata.LogUnitMetadataType.CHECKPOINT_ID;
 import static org.corfudb.protocols.wireprotocol.IMetadata.LogUnitMetadataType.CHECKPOINT_TYPE;
 
@@ -150,6 +151,15 @@ public interface IMetadata {
         getMetadataMap().put(CHECKPOINT_ID, id);
     }
 
+    default UUID getCheckpointedStreamID() {
+        return (UUID) getMetadataMap().getOrDefault(LogUnitMetadataType.CHECKPOINTED_STREAM_ID,
+                null);
+    }
+
+    default void setCheckpointedStreamID(UUID ID) {
+        getMetadataMap().put(CHECKPOINTED_STREAM_ID, ID);
+    }
+
     @RequiredArgsConstructor
     public enum LogUnitMetadataType implements ITypedEnum {
         RANK(1, TypeToken.of(DataRank.class)),
@@ -157,7 +167,8 @@ public interface IMetadata {
         GLOBAL_ADDRESS(4, TypeToken.of(Long.class)),
         COMMIT(5, TypeToken.of(Boolean.class)),
         CHECKPOINT_TYPE(6, TypeToken.of(CheckpointEntry.CheckpointEntryType.class)),
-        CHECKPOINT_ID(7, TypeToken.of(UUID.class))
+        CHECKPOINT_ID(7, TypeToken.of(UUID.class)),
+        CHECKPOINTED_STREAM_ID(8, TypeToken.of(UUID.class))
         ;
         final int type;
         @Getter

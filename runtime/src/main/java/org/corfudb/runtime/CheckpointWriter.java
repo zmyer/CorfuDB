@@ -156,7 +156,7 @@ public class CheckpointWriter {
 
         ImmutableMap<CheckpointEntry.CheckpointDictKey,String> mdKV = ImmutableMap.copyOf(this.mdKV);
         CheckpointEntry cp = new CheckpointEntry(CheckpointEntry.CheckpointEntryType.START,
-                author, checkpointID, mdKV, null);
+                author, checkpointID, streamID, mdKV, null);
         startAddress = sv.append(Collections.singleton(checkpointStreamID), cp, null);
 
         postAppendFunc.accept(cp, startAddress);
@@ -206,7 +206,7 @@ public class CheckpointWriter {
             smrEntries.addTo(smrEntry);
 
             CheckpointEntry cp = new CheckpointEntry(CheckpointEntry.CheckpointEntryType.CONTINUATION,
-                    author, checkpointID, mdKV, smrEntries);
+                    author, checkpointID, streamID, mdKV, smrEntries);
 
             long pos = sv.append(Collections.singleton(checkpointStreamID), cp, null);
 
@@ -239,7 +239,7 @@ public class CheckpointWriter {
         mdKV.put(CheckpointEntry.CheckpointDictKey.BYTE_COUNT, Long.toString(numBytes));
 
         CheckpointEntry cp = new CheckpointEntry(CheckpointEntry.CheckpointEntryType.END,
-                author, checkpointID, mdKV, null);
+                author, checkpointID, streamID, mdKV, null);
         endAddress = sv.append(Collections.singleton(checkpointStreamID), cp, null);
 
         postAppendFunc.accept(cp, endAddress);

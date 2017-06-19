@@ -553,6 +553,12 @@ public class StreamLogFiles implements StreamLog, StreamLogWithRankedAddressSpac
             UUID checkpointId = new UUID(msd, lsd);
 
             logData.setCheckpointID(checkpointId);
+
+            lsd = entry.getCheckpointedStreamdIdLeastSignificant();
+            msd = entry.getCheckpointedStreamIdMostSignificant();
+            UUID streamId = new UUID(msd, lsd);
+
+            logData.setCheckpointedStreamID(streamId);
         }
 
         return logData;
@@ -837,6 +843,10 @@ public class StreamLogFiles implements StreamLog, StreamLogWithRankedAddressSpac
                     entry.getCheckpointID().getMostSignificantBits());
             logEntryBuilder.setCheckpointIDLeastSignificant(
                     entry.getCheckpointID().getLeastSignificantBits());
+            logEntryBuilder.setCheckpointedStreamdIdLeastSignificant(
+                    entry.getCheckpointedStreamID().getLeastSignificantBits());
+            logEntryBuilder.setCheckpointedStreamIdMostSignificant(
+                    entry.getCheckpointedStreamID().getMostSignificantBits());
         }
 
         return logEntryBuilder.build();
