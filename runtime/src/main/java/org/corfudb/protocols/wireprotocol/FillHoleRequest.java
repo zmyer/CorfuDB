@@ -1,7 +1,9 @@
 package org.corfudb.protocols.wireprotocol;
 
+import com.google.common.collect.ImmutableList;
 import io.netty.buffer.ByteBuf;
 
+import java.util.List;
 import java.util.UUID;
 
 import lombok.Data;
@@ -11,13 +13,20 @@ import lombok.RequiredArgsConstructor;
  * Request sent to fill a hole.
  * Created by Maithem on 10/13/2016.
  */
-@CorfuPayload
 @Data
 @RequiredArgsConstructor
 public class FillHoleRequest implements ICorfuPayload<FillHoleRequest> {
 
     final UUID stream;
-    final Long prefix;
+    final List<Long> addresses;
+
+    public FillHoleRequest(long address){
+        this(null, ImmutableList.of(address));
+    }
+
+    public FillHoleRequest(List<Long> addresses){
+        this(null, addresses);
+    }
 
     /**
      * Constructor to generate a Fill Hole Request Payload.
@@ -30,7 +39,7 @@ public class FillHoleRequest implements ICorfuPayload<FillHoleRequest> {
         } else {
             stream = null;
         }
-        prefix = ICorfuPayload.fromBuffer(buf, Long.class);
+        addresses = ICorfuPayload.listFromBuffer(buf, Long.class);
     }
 
     @Override
@@ -39,6 +48,6 @@ public class FillHoleRequest implements ICorfuPayload<FillHoleRequest> {
         if (stream != null) {
             ICorfuPayload.serialize(buf, stream);
         }
-        ICorfuPayload.serialize(buf, prefix);
+        ICorfuPayload.serialize(buf, addresses);
     }
 }

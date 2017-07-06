@@ -1,18 +1,17 @@
 package org.corfudb.runtime.clients;
 
 import com.codahale.metrics.Timer;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Range;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
-
 import java.lang.invoke.MethodHandles;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-
 import lombok.Getter;
 import lombok.Setter;
 import org.corfudb.protocols.logprotocol.LogEntry;
@@ -21,6 +20,7 @@ import org.corfudb.protocols.wireprotocol.CorfuMsgType;
 import org.corfudb.protocols.wireprotocol.CorfuPayloadMsg;
 import org.corfudb.protocols.wireprotocol.DataType;
 import org.corfudb.protocols.wireprotocol.FillHoleRequest;
+import org.corfudb.protocols.wireprotocol.FillHoleResponse;
 import org.corfudb.protocols.wireprotocol.ILogData;
 import org.corfudb.protocols.wireprotocol.IMetadata;
 import org.corfudb.protocols.wireprotocol.ReadRequest;
@@ -186,6 +186,19 @@ public class LogUnitClient implements IClient {
      */
     @ClientHandler(type = CorfuMsgType.READ_RESPONSE)
     private static Object handleReadResponse(CorfuPayloadMsg<ReadResponse> msg,
+                                             ChannelHandlerContext ctx, IClientRouter r) {
+        return msg.getPayload();
+    }
+
+    /**
+     * Handle a READ_RESPONSE message.
+     *
+     * @param msg Incoming Message
+     * @param ctx Context
+     * @param r   Router
+     */
+    @ClientHandler(type = CorfuMsgType.FILL_HOLE_RESPONSE)
+    private static Object handleHoleFillResponse(CorfuPayloadMsg<FillHoleResponse> msg,
                                              ChannelHandlerContext ctx, IClientRouter r) {
         return msg.getPayload();
     }
@@ -388,28 +401,19 @@ public class LogUnitClient implements IClient {
      *
      * @param address The address to fill a hole at.
      */
-    public CompletableFuture<Boolean> fillHole(long address) {
-        Timer.Context context = getTimerContext("fillHole");
-        CompletableFuture<Boolean> cf = router.sendMessageAndGetCompletable(
-                CorfuMsgType.FILL_HOLE.payloadMsg(new FillHoleRequest(null, address)));
-        return cf.thenApply(x -> {
-            context.stop();
-            return x;
-        });
+    public CompletableFuture<FillHoleResponse> fillHole(long address) {
+        return fillHole(ImmutableList.of(address));
     }
 
     /**
-     * Fills hole at a given address for a particular streamID.
+     * Fill a hole at given addresses.
      *
-     * @param streamID StreamID to hole fill.
-     * @param address  The address to fill a hole at.
+     * @param addresses The address to fill a hole at.
      */
-    @Deprecated // TODO: Add replacement method that conforms to style
-    @SuppressWarnings("checkstyle:abbreviation") // Due to deprecation
-    public CompletableFuture<Boolean> fillHole(UUID streamID, long address) {
+    public CompletableFuture<FillHoleResponse> fillHole(List<Long> addresses) {
         Timer.Context context = getTimerContext("fillHole");
-        CompletableFuture<Boolean> cf = router.sendMessageAndGetCompletable(
-                CorfuMsgType.FILL_HOLE.payloadMsg(new FillHoleRequest(streamID, address)));
+        CompletableFuture<FillHoleResponse> cf = router.sendMessageAndGetCompletable(
+                CorfuMsgType.FILL_HOLE.payloadMsg(new FillHoleRequest(addresses)));
         return cf.thenApply(x -> {
             context.stop();
             return x;

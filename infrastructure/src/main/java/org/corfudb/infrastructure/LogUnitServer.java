@@ -6,25 +6,26 @@ import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
 import io.netty.channel.ChannelHandlerContext;
-
 import java.lang.invoke.MethodHandles;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-
 import org.corfudb.infrastructure.log.InMemoryStreamLog;
 import org.corfudb.infrastructure.log.StreamLog;
 import org.corfudb.infrastructure.log.StreamLogFiles;
 import org.corfudb.protocols.wireprotocol.CorfuMsg;
 import org.corfudb.protocols.wireprotocol.CorfuMsgType;
 import org.corfudb.protocols.wireprotocol.CorfuPayloadMsg;
+import org.corfudb.protocols.wireprotocol.FillHoleRequest;
+import org.corfudb.protocols.wireprotocol.FillHoleResponse;
 import org.corfudb.protocols.wireprotocol.ILogData;
 import org.corfudb.protocols.wireprotocol.LogData;
 import org.corfudb.protocols.wireprotocol.ReadRequest;
@@ -213,23 +214,30 @@ public class LogUnitServer extends AbstractServer {
     }
 
     @ServerHandler(type = CorfuMsgType.FILL_HOLE, opTimer = metricsPrefix + "fill-hole")
-    private void fillHole(CorfuPayloadMsg<TrimRequest> msg, ChannelHandlerContext ctx,
+    private void fillHole(CorfuPayloadMsg<FillHoleRequest> msg, ChannelHandlerContext ctx,
                           IServerRouter r,
                           boolean isMetricsEnabled) {
-        try {
-            dataCache.put(msg.getPayload().getAddress(), LogData.HOLE);
-            r.sendResponse(ctx, msg, CorfuMsgType.WRITE_OK.msg());
-
-        } catch (OverwriteException e) {
-            r.sendResponse(ctx, msg, CorfuMsgType.ERROR_OVERWRITE.msg());
-        } catch (DataOutrankedException e) {
-            r.sendResponse(ctx, msg, CorfuMsgType.ERROR_DATA_OUTRANKED.msg());
-        } catch (ValueAdoptedException e) {
-
-            r.sendResponse(ctx, msg, CorfuMsgType.ERROR_VALUE_ADOPTED.payloadMsg(e
-                    .getReadResponse()));
+        List<Long> addresses = msg.getPayload().getAddresses();
+        Map<Long, Byte> result = new LinkedHashMap<>();
+        Map<Long, LogData> readSet = new HashMap<>();
+        for (long address : addresses){
+            try {
+                dataCache.put(address, LogData.HOLE);
+                result.put(address, CorfuMsgType.WRITE_OK.asByte());
+            } catch (OverwriteException e) {
+                result.put(address, CorfuMsgType.ERROR_OVERWRITE.asByte());
+            } catch (DataOutrankedException e) {
+                result.put(address, CorfuMsgType.ERROR_DATA_OUTRANKED.asByte());
+            } catch (ValueAdoptedException e) {
+                result.put(address, CorfuMsgType.ERROR_VALUE_ADOPTED.asByte());
+                readSet.putAll(e.getReadResponse().getReadSet());
+            }
         }
+        ReadResponse readResponse = readSet.isEmpty() ? null : new ReadResponse(readSet);
+        r.sendResponse(ctx, msg, CorfuMsgType.FILL_HOLE_RESPONSE.payloadMsg(new
+                FillHoleResponse(result, readResponse)));
     }
+
 
     @ServerHandler(type = CorfuMsgType.TRIM, opTimer = metricsPrefix + "fill-hole")
     private void trim(CorfuPayloadMsg<TrimRequest> msg, ChannelHandlerContext ctx, IServerRouter r,

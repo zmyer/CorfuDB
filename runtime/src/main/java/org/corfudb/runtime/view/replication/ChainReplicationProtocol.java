@@ -6,10 +6,15 @@ import java.util.Set;
 import java.util.TreeMap;
 import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
+import org.corfudb.protocols.wireprotocol.CorfuMsgType;
+import org.corfudb.protocols.wireprotocol.FillHoleResponse;
 import org.corfudb.protocols.wireprotocol.ILogData;
 import org.corfudb.protocols.wireprotocol.LogData;
+import org.corfudb.runtime.clients.LogUnitClient;
+import org.corfudb.runtime.exceptions.DataOutrankedException;
 import org.corfudb.runtime.exceptions.OverwriteException;
 import org.corfudb.runtime.exceptions.RecoveryException;
+import org.corfudb.runtime.exceptions.ValueAdoptedException;
 import org.corfudb.runtime.view.Layout;
 import org.corfudb.util.CFUtils;
 
@@ -125,8 +130,7 @@ public class ChainReplicationProtocol extends AbstractReplicationProtocol {
                                     .write(data),
                             OverwriteException.class);
                 } else {
-                    CFUtils.getUninterruptibly(layout.getLogUnitClient(globalAddress, i)
-                            .fillHole(globalAddress), OverwriteException.class);
+                    holeFillHelper(layout.getLogUnitClient(globalAddress, i), globalAddress);
                 }
             } catch (OverwriteException oe) {
                 log.trace("Propogate[{}]: Completed by other writer", globalAddress);
@@ -201,13 +205,26 @@ public class ChainReplicationProtocol extends AbstractReplicationProtocol {
         // In chain replication, we write synchronously to every unit in
         // the chain.
         try {
-            CFUtils.getUninterruptibly(layout.getLogUnitClient(globalAddress, 0)
-                    .fillHole(globalAddress), OverwriteException.class);
+            holeFillHelper(layout.getLogUnitClient(globalAddress, 0), globalAddress);
             propagate(layout, globalAddress, null);
         } catch (OverwriteException oe) {
             // The hole-fill failed. We must ensure the other writer's
             // value is adopted before returning.
             recover(layout, globalAddress);
+        }
+    }
+
+    private void holeFillHelper(LogUnitClient client, long globalAddress){
+        FillHoleResponse response = CFUtils.getUninterruptibly(client.fillHole(globalAddress));
+        byte result = response.getResult().getOrDefault(globalAddress, null);
+        if (result == CorfuMsgType.ERROR_DATA_OUTRANKED.asByte()){
+            throw new DataOutrankedException();
+        }
+        if (result == CorfuMsgType.ERROR_VALUE_ADOPTED.asByte()){
+            throw new ValueAdoptedException(response.getValueAdopted());
+        }
+        if (result != CorfuMsgType.WRITE_OK.asByte()){
+            throw new OverwriteException();
         }
     }
 }

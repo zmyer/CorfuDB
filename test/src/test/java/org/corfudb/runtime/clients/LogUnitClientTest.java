@@ -2,34 +2,36 @@ package org.corfudb.runtime.clients;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import java.io.File;
+import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.corfudb.format.Types;
 import org.corfudb.infrastructure.AbstractServer;
 import org.corfudb.infrastructure.LogUnitServer;
 import org.corfudb.infrastructure.ServerContext;
 import org.corfudb.infrastructure.ServerContextBuilder;
 import org.corfudb.infrastructure.log.StreamLogFiles;
+import org.corfudb.protocols.wireprotocol.CorfuMsgType;
 import org.corfudb.protocols.wireprotocol.DataType;
+import org.corfudb.protocols.wireprotocol.FillHoleResponse;
 import org.corfudb.protocols.wireprotocol.ILogData;
 import org.corfudb.protocols.wireprotocol.IMetadata;
-import org.corfudb.protocols.wireprotocol.IToken;
 import org.corfudb.protocols.wireprotocol.LogData;
 import org.corfudb.protocols.wireprotocol.ReadResponse;
 import org.corfudb.runtime.CorfuRuntime;
 import org.corfudb.runtime.exceptions.DataCorruptionException;
 import org.corfudb.runtime.exceptions.DataOutrankedException;
 import org.corfudb.runtime.exceptions.OverwriteException;
-import org.corfudb.runtime.exceptions.TrimmedException;
 import org.corfudb.runtime.exceptions.ValueAdoptedException;
 import org.junit.Test;
-
-import java.io.File;
-import java.io.RandomAccessFile;
-import java.nio.ByteBuffer;
-import java.util.Collections;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.ExecutionException;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.corfudb.infrastructure.log.StreamLogFiles.METADATA_SIZE;
@@ -236,16 +238,36 @@ public class LogUnitClientTest extends AbstractClientTest {
     @Test
     public void holeFillCannotOverwrite()
             throws Exception {
+        long address = 0L;
         byte[] testString = "hello world".getBytes();
-        client.write(0, Collections.<UUID>emptySet(), null, testString, Collections.emptyMap()).get();
+        client.write(address, Collections.<UUID>emptySet(), null, testString, Collections.emptyMap()).get();
 
-        LogData r = client.read(0).get().getReadSet().get(0L);
-        assertThat(r.getType())
-                .isEqualTo(DataType.DATA);
+        LogData r = client.read(address).get().getReadSet().get(address);
+        assertThat(r.getType()).isEqualTo(DataType.DATA);
 
-        assertThatThrownBy(() -> client.fillHole(0).get())
-                .isInstanceOf(ExecutionException.class)
-                .hasCauseInstanceOf(OverwriteException.class);
+        FillHoleResponse response = client.fillHole(address).get();
+        Map<Long, Byte> map = response.getResult();
+        assertThat(map.size()).isEqualTo(1);
+        assertThat(map.get(address)).isEqualTo(CorfuMsgType.ERROR_OVERWRITE.asByte());
+    }
+
+    @Test
+    public void multiHoleFill()
+            throws Exception {
+        final long ADDRESS_0 = 0L;
+        final long ADDRESS_1 = 1L;
+        final long ADDRESS_2 = 33L;
+
+        final List<Long> addresses = Stream.of(ADDRESS_0, ADDRESS_1, ADDRESS_2).collect(Collectors.toList());
+        byte[] testString = "hello world".getBytes();
+        client.write(addresses.get(0), Collections.<UUID>emptySet(), null, testString, Collections.emptyMap()).get();
+
+        FillHoleResponse response = client.fillHole(addresses).get();
+        Map<Long, Byte> map = response.getResult();
+        assertThat(map.size()).isEqualTo(addresses.size());
+        assertThat(map.get(addresses.get(0))).isEqualTo(CorfuMsgType.ERROR_OVERWRITE.asByte());
+        assertThat(map.get(addresses.get(1))).isEqualTo(CorfuMsgType.WRITE_OK.asByte());
+        assertThat(map.get(addresses.get(2))).isEqualTo(CorfuMsgType.WRITE_OK.asByte());
     }
 
     @Test
