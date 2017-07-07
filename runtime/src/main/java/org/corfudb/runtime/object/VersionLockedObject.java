@@ -413,7 +413,7 @@ public class VersionLockedObject<T> {
      * Reset this object to the uninitialized state.
      */
     public void resetUnsafe() {
-        log.debug("Reset[{}]", this);
+        log.warn("Reset[{}]", this);
         object = newObjectFn.get();
         smrStream.reset();
         optimisticStream = null;

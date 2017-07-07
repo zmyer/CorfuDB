@@ -111,20 +111,24 @@ public class OptimisticTransactionalContext extends AbstractTransactionalContext
                             // inside syncObjectUnsafe, depending on the object
                             // version, we may need to undo or redo
                             // committed changes, or apply forward committed changes.
+                            int i = 0;
                             try {
                                 o.syncObjectUnsafe(getSnapshotTimestamp());
                             } catch (TrimmedException te) {
                                 // If a trim is encountered, we must reset the object
                                 o.resetUnsafe();
-                                // and abort the transaction
-                                TransactionAbortedException tae =
-                                        new TransactionAbortedException(
-                                                new TxResolutionInfo(getTransactionID(),
-                                                        getSnapshotTimestamp()), null,
-                                                        proxy.getStreamID(),
-                                                AbortCause.TRIM, te, this);
-                                abortTransaction(tae);
-                                throw tae;
+                                i++;
+                                if (i > 1) {
+                                    // and abort the transaction
+                                    TransactionAbortedException tae =
+                                            new TransactionAbortedException(
+                                                    new TxResolutionInfo(getTransactionID(),
+                                                            getSnapshotTimestamp()), null,
+                                                    proxy.getStreamID(),
+                                                    AbortCause.TRIM, te, this);
+                                    abortTransaction(tae);
+                                    throw tae;
+                                }
                             }
                         },
                     o -> accessFunction.access(o)
