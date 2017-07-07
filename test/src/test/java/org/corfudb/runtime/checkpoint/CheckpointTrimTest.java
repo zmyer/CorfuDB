@@ -100,4 +100,41 @@ public class CheckpointTrimTest extends AbstractViewTest {
         assertThat(newTestMap)
                  .containsKeys("a", "b", "c");
     }
+
+
+    @Test
+    public void testCheckpointTrimDuringTxPlayback() throws Exception {
+        Map<String, String> testMap = getDefaultRuntime().getObjectsView().build()
+                .setTypeToken(new TypeToken<SMRMap<String, String>>() {})
+                .setStreamName("test")
+                .open();
+
+        testMap.put("e", "e");
+
+        // Place 3 entries into the map
+        t1(() -> {
+        getRuntime().getObjectsView().TXBegin();
+        testMap.put("a", "a");
+        testMap.put("b", "b");
+        testMap.put("c", "c");});
+
+
+        // Insert a checkpoint
+        t2(() -> {MultiCheckpointWriter mcw = new MultiCheckpointWriter();
+        mcw.addMap((SMRMap) testMap);
+        long checkpointAddress = mcw.appendCheckpoints(getRuntime(), "author");
+
+        // Trim the log
+        getRuntime().getAddressSpaceView().prefixTrim(checkpointAddress - 1);
+        getRuntime().getAddressSpaceView().gc();
+        getRuntime().getAddressSpaceView().invalidateServerCaches();
+        getRuntime().getAddressSpaceView().invalidateClientCache();});
+
+        t2(() -> testMap.put("d", "d"));
+
+        // Sync should encounter trim exception, reset, and use checkpoint
+        t1(() -> assertThat(testMap)
+                .containsKeys("a", "b", "c", "e"));
+        t1(() -> getRuntime().getObjectsView().TXEnd());
+    }
 }
