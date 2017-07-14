@@ -126,7 +126,7 @@ public class CorfuTestParameters {
         // Random Seed
         SEED = System.getProperty("test.seed") == null ? 0L :
                 Long.parseLong(System.getProperty("test.seed"));
-        printParameters();
+        //printParameters();
     }
 
     /** Print the parameters, using reflection magic
