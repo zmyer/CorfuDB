@@ -10,6 +10,8 @@ import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
+import org.junit.jupiter.api.extension.ConditionEvaluationResult;
+import org.junit.jupiter.api.extension.ExecutionCondition;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.ParameterContext;
 import org.junit.jupiter.api.extension.ParameterResolutionException;
@@ -27,7 +29,7 @@ import ch.qos.logback.classic.LoggerContext;
  */
 public class CorfuTestExtension implements
         TestInstancePostProcessor, BeforeAllCallback, BeforeTestExecutionCallback,
-        BeforeEachCallback,
+        BeforeEachCallback, ExecutionCondition,
         AfterTestExecutionCallback, AfterAllCallback, ParameterResolver {
 
     public static boolean isBuild() {
@@ -36,7 +38,7 @@ public class CorfuTestExtension implements
 
     public static void buildPrint(String toPrint) {
         if (isBuild()) {
-            AnsiConsole.out.print(toPrint);
+            System.out.print(toPrint);
         }
     }
 
@@ -69,9 +71,6 @@ public class CorfuTestExtension implements
 
     @Override
     public void beforeTestExecution(ExtensionContext extensionContext) throws Exception {
-        // Print the name of the test
-        buildPrint(Ansi.ansi().fgBlue().a(extensionContext.getDisplayName()).fgDefault()
-                .toString());
         // Set the correct logging level
         Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
         LoggingLevel level = extensionContext.getTestMethod().get()
@@ -111,16 +110,31 @@ public class CorfuTestExtension implements
 
     @Override
     public void beforeEach(ExtensionContext extensionContext) throws Exception {
-        // Print the name of the test
-        buildPrint(Ansi.ansi().fgYellow().a(extensionContext.getDisplayName()).fgDefault()
-                .toString());
     }
 
     @Override
     public void postProcessTestInstance(Object o,
                                         ExtensionContext extensionContext) throws Exception {
         // Reflective hack to get name
-        buildPrint(extensionContext
-                .getTestDescriptor().getChildren().iterator().next().getDisplayName());
+        //buildPrint(extensionContext
+        //        .getTestDescriptor().getChildren().iterator().next().getDisplayName());
+    }
+
+    @Override
+    public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext extensionContext) {
+        if (extensionContext.getTestMethod().isPresent()
+                && extensionContext.getParent().isPresent()
+                && !extensionContext.getParent().get().getTestMethod().isPresent()) {
+            buildPrint(extensionContext.getDisplayName());
+        } else if (
+                extensionContext.getTestMethod().isPresent()
+                        && extensionContext.getParent().isPresent()
+                        && extensionContext.getParent().get().getTestMethod().isPresent()
+                ) {
+            // Print the name of the test
+            buildPrint(Ansi.ansi().fgBlue().a("\n").a(extensionContext.getDisplayName()).reset()
+                    .toString());
+        }
+        return ConditionEvaluationResult.enabled("");
     }
 }

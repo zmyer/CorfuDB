@@ -12,8 +12,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 /**
  * Created by mwei on 7/14/17.
  */
-@RepeatedTest(2)
 @ExtendWith(CorfuTestExtension.class)
+@Test
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface CorfuTest {
