@@ -2,6 +2,8 @@ package org.corfudb.test;
 
 import static org.corfudb.AbstractCorfuTest.SERVERS;
 
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -34,6 +36,11 @@ public class CorfuTestInstance {
 
     final ExtensionContext context;
 
+    /** A map of parameter indexes to generated runtimes
+     *  which are available.
+     */
+    final Map<Integer, CorfuRuntime> generatedRuntimes = new HashMap<>();
+
     /** A map of the current test servers, by endpoint name */
     final Map<String, CorfuTestInstance.TestServer> testServerMap = new ConcurrentHashMap<>();
 
@@ -48,7 +55,12 @@ public class CorfuTestInstance {
     }
 
     public CorfuRuntime getRuntimeAsParameter(ParameterContext pContext) {
-        return new CorfuRuntime(getEndpoint(SERVERS.PORT_0)).connect();
+        if (generatedRuntimes.get(pContext.getIndex()) != null) {
+            return generatedRuntimes.get(pContext.getIndex());
+        }
+        CorfuRuntime rt = new CorfuRuntime(getEndpoint(SERVERS.PORT_0)).connect();
+        generatedRuntimes.put(pContext.getIndex(),rt);
+        return rt;
     }
 
     /** Get the endpoint string, given a port number.

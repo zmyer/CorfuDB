@@ -568,4 +568,42 @@ public class CheckpointTest extends AbstractObjectTest {
         getRuntime().getObjectsView().TXEnd();
 
     }
+
+
+
+    @Test
+    public void transactionalReadAfterCheckpoint2() throws Exception {
+        SMRMap<String, String> testMap = getDefaultRuntime().getObjectsView().build()
+                .setTypeToken(new TypeToken<SMRMap<String, String>>() {
+                })
+                .setStreamName("test")
+                .open();
+
+        // Place entries into the map
+        testMap.put("a", "b");
+
+        // Insert a checkpoint
+        MultiCheckpointWriter mcw = new MultiCheckpointWriter();
+        mcw.addMap((SMRMap) testMap);
+        long checkpointAddress = mcw.appendCheckpoints(getRuntime(), "author");
+
+
+
+
+        // Trim the log
+        getRuntime().getObjectsView().TXBegin();
+        testMap.blindPut("a", "b");
+
+        getRuntime().getAddressSpaceView().prefixTrim(checkpointAddress - 1);
+        getRuntime().getAddressSpaceView().gc();
+        getRuntime().getAddressSpaceView().invalidateServerCaches();
+        getRuntime().getAddressSpaceView().invalidateClientCache();
+
+        t2(() -> testMap.put("nonTX", "b"));
+        // TX2: Read most recent state in TX
+
+        testMap.put("a", "b");
+        getRuntime().getObjectsView().TXEnd();
+
+    }
 }

@@ -100,4 +100,7 @@ public class CheckpointTrimTest extends AbstractViewTest {
         assertThat(newTestMap)
                  .containsKeys("a", "b", "c");
     }
+
+
+
 }

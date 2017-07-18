@@ -1,8 +1,12 @@
 package org.corfudb.test;
 
+import com.google.gson.reflect.TypeToken;
+
 import java.util.Properties;
 
+import org.apache.http.cookie.SM;
 import org.corfudb.runtime.CorfuRuntime;
+import org.corfudb.runtime.collections.SMRMap;
 import org.fusesource.jansi.Ansi;
 import org.fusesource.jansi.AnsiConsole;
 import org.junit.jupiter.api.extension.AfterAllCallback;
@@ -92,6 +96,8 @@ public class CorfuTestExtension implements
             throws ParameterResolutionException {
         if (parameterContext.getParameter().getType().isAssignableFrom(CorfuRuntime.class)) {
             return true;
+        } else if (parameterContext.getParameter().getType().isAssignableFrom(SMRMap.class)) {
+            return true;
         }
         return false;
     }
@@ -104,6 +110,14 @@ public class CorfuTestExtension implements
             return extensionContext.getStore(ExtensionContext.Namespace
                     .create(CorfuTestExtension.class)).get(CorfuTestInstance.class,
                     CorfuTestInstance.class).getRuntimeAsParameter(parameterContext);
+        } else if (parameterContext.getParameter().getType().isAssignableFrom(SMRMap.class)) {
+            return extensionContext.getStore(ExtensionContext.Namespace
+                    .create(CorfuTestExtension.class)).get(CorfuTestInstance.class,
+                    CorfuTestInstance.class).getRuntimeAsParameter(parameterContext)
+                    .getObjectsView().build()
+                        .setType(SMRMap.class)
+                        .setStreamName("test-" + parameterContext.getIndex())
+                        .open();
         }
         return null;
     }
