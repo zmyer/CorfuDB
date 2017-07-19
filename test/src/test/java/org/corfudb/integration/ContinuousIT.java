@@ -7,6 +7,7 @@ import org.corfudb.runtime.MultiCheckpointWriter;
 import org.corfudb.runtime.checkpoint.AbstractCheckpointTest;
 import org.corfudb.runtime.checkpoint.CPSerializer;
 import org.corfudb.runtime.collections.SMRMap;
+import org.corfudb.runtime.exceptions.TransactionAbortedException;
 import org.corfudb.runtime.exceptions.TrimmedException;
 import org.corfudb.runtime.object.AbstractObjectTest;
 import org.corfudb.runtime.object.transactions.AbstractTransactionalContext;
@@ -297,29 +298,28 @@ public class ContinuousIT extends AbstractCheckpointTest {
             long checkpointAddress = -1;
             CorfuRuntime currentRuntime2 = getMyRuntime();
 
-            for (;;) {
+            for (int t = 0; t < 10;t++) {
                 checkpointAddress = mapCkpoint(currentRuntime2, m2A, m2B);
                 try {
-                    Thread.sleep(PARAMETERS.TIMEOUT_NORMAL.toMillis());
+                    Thread.sleep(PARAMETERS.TIMEOUT_SHORT.toMillis());
                 } catch (InterruptedException ie) {
                     //
                 }
                 // Trim the log
                 System.out.println("trim " + checkpointAddress);
-                if (checkpointAddress > 0)
-                    logTrim(currentRuntime2, checkpointAddress - 1);
+                logTrim(currentRuntime2, checkpointAddress - 1);
             }
         });
 
         scheduleConcurrently(PARAMETERS.NUM_ITERATIONS_VERY_LOW, ignored_task_num -> {
-                    CorfuRuntime currentRuntime2 = currentRuntime; //setNewRuntime();
+                    CorfuRuntime currentRuntime2 = setNewRuntime();
                     Map<String, Long> localm2A = instantiateMap(currentRuntime2, streamNameA);
                     Map<String, Long> localm2B = instantiateMap(currentRuntime2, streamNameB);
 
                     for (int j = 0; ; j++) {
                         try {
                             currentRuntime2.getObjectsView().TXBuild()
-                                    .setType(TransactionType.OPTIMISTIC)
+                                    .setType(TransactionType.SNAPSHOT)
                                     .begin();
 
                             System.out.println(j + ".." +
@@ -340,13 +340,17 @@ public class ContinuousIT extends AbstractCheckpointTest {
                                 assertThat(localm2B.get(String.valueOf(i))).isEqualTo(0L);
                             }
 
-                            System.out.println("commit " + j + "..");
-
                             currentRuntime2.getObjectsView().TXEnd();
+                            System.out.println(j + "..committed");
+
                         } catch (InterruptedException ie) {
                             System.out.println(j + " ..interrupted");
                         } catch (TrimmedException te) {
                             System.out.println(j + " ..trimmed exception");
+                        } catch (TransactionAbortedException tae) {
+                            System.out.println(j + ".. aborted");
+                        } catch (Exception o) {
+                            System.out.println(j + ".. other exception");
                         }
                     }
                 });
