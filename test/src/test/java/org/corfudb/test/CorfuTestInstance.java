@@ -16,6 +16,8 @@ import org.corfudb.infrastructure.SequencerServer;
 import org.corfudb.infrastructure.ServerContext;
 import org.corfudb.infrastructure.ServerContextBuilder;
 import org.corfudb.infrastructure.TestServerRouter;
+import org.corfudb.protocols.wireprotocol.CorfuMsgType;
+import org.corfudb.protocols.wireprotocol.LayoutBootstrapRequest;
 import org.corfudb.runtime.CorfuRuntime;
 import org.corfudb.runtime.clients.BaseClient;
 import org.corfudb.runtime.clients.IClientRouter;
@@ -24,6 +26,7 @@ import org.corfudb.runtime.clients.LogUnitClient;
 import org.corfudb.runtime.clients.ManagementClient;
 import org.corfudb.runtime.clients.SequencerClient;
 import org.corfudb.runtime.clients.TestClientRouter;
+import org.corfudb.runtime.view.Layout;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.ParameterContext;
 
@@ -48,17 +51,30 @@ public class CorfuTestInstance {
     final Map<CorfuRuntime, Map<String, TestClientRouter>>
             runtimeRouterMap = new ConcurrentHashMap<>();
 
-    public CorfuTestInstance(ExtensionContext context) {
+    final CorfuConfiguration configuration;
+
+    public CorfuTestInstance(ExtensionContext context, CorfuConfiguration configuration) {
         this.context = context;
+        this.configuration = configuration;
         CorfuRuntime.overrideGetRouterFunction = this::getRouterFunction;
-        testServerMap.put(getEndpoint(SERVERS.PORT_0), new TestServer(SERVERS.PORT_0));
+        configuration.serverConfiguration.accept(new TestInstanceBuilder());
+    }
+
+    public CorfuRuntime getNewRuntime() {
+        CorfuRuntime rt = configuration.runtimeSupplier.get().connect();
+        int i = 0;
+        while (generatedRuntimes.containsKey(i)) {
+            i++;
+        }
+        generatedRuntimes.put(i, rt);
+        return rt;
     }
 
     public CorfuRuntime getRuntimeAsParameter(ParameterContext pContext) {
         if (generatedRuntimes.get(pContext.getIndex()) != null) {
             return generatedRuntimes.get(pContext.getIndex());
         }
-        CorfuRuntime rt = new CorfuRuntime(getEndpoint(SERVERS.PORT_0)).connect();
+        CorfuRuntime rt = configuration.runtimeSupplier.get().connect();
         generatedRuntimes.put(pContext.getIndex(),rt);
         return rt;
     }
@@ -68,7 +84,7 @@ public class CorfuTestInstance {
      * @param port  The port number to get an endpoint string for.
      * @return      The endpoint string.
      */
-    public String getEndpoint(int port) {
+    public static String getEndpoint(int port) {
         return "test:" + port;
     }
 
@@ -95,6 +111,33 @@ public class CorfuTestInstance {
                     return tcn;
                 }
         );
+    }
+
+    public class TestInstanceBuilder {
+
+        void standard() {
+            testServerMap.put(getEndpoint(SERVERS.PORT_0), new TestServer(SERVERS.PORT_0));
+        }
+
+        void addServer(int port) {
+            testServerMap.put(getEndpoint(port), new TestServer(port));
+        }
+
+        void addServer(int port, ServerContext context) {
+            testServerMap.put(getEndpoint(port), new TestServer(context.getServerConfig()));
+        }
+
+        void bootstrapAllServers(Layout l) {
+            testServerMap.entrySet().parallelStream()
+                    .forEach(e -> {
+                        e.getValue().layoutServer
+                                .handleMessage(CorfuMsgType.LAYOUT_BOOTSTRAP.payloadMsg(new LayoutBootstrapRequest(l)),
+                                        null, e.getValue().serverRouter);
+                        e.getValue().managementServer
+                                .handleMessage(CorfuMsgType.MANAGEMENT_BOOTSTRAP_REQUEST.payloadMsg(l),
+                                        null, e.getValue().serverRouter);
+                    });
+        }
     }
 
     /**

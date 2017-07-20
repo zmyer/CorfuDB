@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>
  * Created by zlokhandwala on 5/24/17.
  */
-public class BackpointerStreamViewTest extends AbstractViewTest {
+public class BackpointerStreamViewTestOld extends AbstractViewTest {
 
     /**
      * Tests the hasNext functionality of the streamView.

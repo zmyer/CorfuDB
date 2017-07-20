@@ -54,6 +54,9 @@ public class ServerContextBuilder {
     public static ServerContext defaultContext(int port) {
         return new ServerContextBuilder().setPort(port).build();
     }
+    public static ServerContext defaultNonSingleContext(int port) {
+        return new ServerContextBuilder().setPort(port).setSingle(false).build();
+    }
 
     public static ServerContext emptyContext() {
         return new ServerContextBuilder().build();

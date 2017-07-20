@@ -50,8 +50,10 @@
     <property name="fileExtensions" value="java, properties, xml"/>
 
     <module name="TreeWalker">
+        <!--
+        TODO: Suppress magic numbers in annotations
         <module name="MagicNumber"/>
-
+        -->
         <module name="SuppressWarningsHolder" />
     </module>
 
