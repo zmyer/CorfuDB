@@ -6,28 +6,11 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.corfudb.runtime.CorfuRuntime;
 import org.corfudb.test.ICorfuTest;
 import org.corfudb.util.Utils;
-import org.corfudb.util.serializer.ICorfuSerializable;
-
-import io.netty.buffer.ByteBuf;
-import lombok.Data;
 
 public class BackpointerStreamViewContractTest implements
-        StreamViewContract<BackpointerStreamView, BackpointerStreamViewContractTest.LongWrapper>,
+        StreamViewContract<BackpointerStreamView, byte[]>,
         ICorfuTest {
 
-    @Data
-    static class LongWrapper implements ICorfuSerializable {
-        final long value;
-
-        @Override
-        public void serialize(ByteBuf b) {
-            b.writeBytes(Utils.longToBigEndianByteArray(value));
-        }
-
-        public static ICorfuSerializable deserialize(ByteBuf b, CorfuRuntime rt) {
-            return new LongWrapper(b.readLong());
-        }
-    }
 
     final AtomicInteger streamNumber = new AtomicInteger(0);
 
@@ -48,7 +31,7 @@ public class BackpointerStreamViewContractTest implements
 
     final AtomicLong entryCounter = new AtomicLong(0L);
     @Override
-    public LongWrapper createEntry() {
-        return new LongWrapper(entryCounter.getAndIncrement());
+    public byte[] createEntry() {
+        return Utils.longToBigEndianByteArray(entryCounter.getAndIncrement());
     }
 }

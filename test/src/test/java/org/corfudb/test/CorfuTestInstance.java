@@ -1,11 +1,18 @@
 package org.corfudb.test;
 
 import static org.corfudb.AbstractCorfuTest.SERVERS;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.corfudb.infrastructure.BaseServer;
 import org.corfudb.infrastructure.IServerRouter;
@@ -24,12 +31,16 @@ import org.corfudb.runtime.clients.IClientRouter;
 import org.corfudb.runtime.clients.LayoutClient;
 import org.corfudb.runtime.clients.LogUnitClient;
 import org.corfudb.runtime.clients.ManagementClient;
+import org.corfudb.runtime.clients.NettyClientRouter;
 import org.corfudb.runtime.clients.SequencerClient;
-import org.corfudb.runtime.clients.TestClientRouter;
 import org.corfudb.runtime.view.Layout;
+import org.corfudb.util.MetricsUtils;
+import org.corfudb.util.Utils;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.ParameterContext;
 
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandlerContext;
 import lombok.Data;
 
 /**
@@ -48,7 +59,7 @@ public class CorfuTestInstance {
     final Map<String, CorfuTestInstance.TestServer> testServerMap = new ConcurrentHashMap<>();
 
     /** A map of maps to endpoint->routers, mapped for each runtime instance captured */
-    final Map<CorfuRuntime, Map<String, TestClientRouter>>
+    final Map<CorfuRuntime, Map<String, NettyClientRouter>>
             runtimeRouterMap = new ConcurrentHashMap<>();
 
     final CorfuConfiguration configuration;
@@ -101,14 +112,29 @@ public class CorfuTestInstance {
         }
         return runtimeRouterMap.get(runtime).computeIfAbsent(endpoint,
                 x -> {
-                    TestClientRouter tcn =
-                            new TestClientRouter(testServerMap.get(endpoint).getServerRouter());
-                    tcn.addClient(new BaseClient())
+                    NettyClientRouter r = spy(new NettyClientRouter(endpoint));
+                    r.channel = mock(Channel.class);
+                    r.context = mock(ChannelHandlerContext.class);
+                    r.connected = true;
+                    when(r.channel.writeAndFlush(any()))
+                            .then(a -> {
+                                ((TestServerRouter)testServerMap.get(endpoint).serverRouter)
+                                                .sendServerMessage(a.getArgument(0), r.context);
+                                        return null;
+                                    }
+                            );
+                    when(r.context.writeAndFlush(any()))
+                            .then(a -> {
+                                r.channelRead(r.context, a.getArgument(0));
+                                return null;
+                            });
+
+                    r.addClient(new BaseClient())
                             .addClient(new SequencerClient())
                             .addClient(new LayoutClient())
                             .addClient(new LogUnitClient())
                             .addClient(new ManagementClient());
-                    return tcn;
+                    return r;
                 }
         );
     }

@@ -20,6 +20,7 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 
@@ -33,6 +34,7 @@ public class MetricsUtils {
 
     private static Properties metricsProperties = new Properties();
     @Getter
+    @Setter
     private static boolean metricsCollectionEnabled = true;
     private static boolean metricsReportingEnabled = false;
     private static String mpTrigger = "filter-trigger"; // internal use only

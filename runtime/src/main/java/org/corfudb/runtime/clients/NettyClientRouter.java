@@ -163,7 +163,7 @@ public class NettyClientRouter extends SimpleChannelInboundHandler<CorfuMsg>
      * Flag, if we are connected.
      */
     @Getter
-    volatile Boolean connected;
+    public volatile Boolean connected;
 
     private Boolean tlsEnabled = false;
 
@@ -272,7 +272,7 @@ public class NettyClientRouter extends SimpleChannelInboundHandler<CorfuMsg>
         }
 
         addClient(new BaseClient());
-        start();
+        //start();
     }
 
     /**

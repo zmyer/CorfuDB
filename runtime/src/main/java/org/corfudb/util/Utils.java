@@ -10,6 +10,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
 import java.util.Collections;
@@ -467,6 +468,17 @@ public class Utils {
         } catch (Exception e) {
             log.warn("printLogAnatomy [logAddress={}] cannot be deserialized ",
                     logData.getGlobalAddress());
+        }
+    }
+
+   public static <T> void setField(T obj, String fieldName, Object setting) {
+        try {
+            Class<?> cls = obj.getClass();
+            Field f = cls.getField(fieldName);
+            f.setAccessible(true);
+            f.set(obj, setting);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            throw new RuntimeException(e);
         }
     }
 }

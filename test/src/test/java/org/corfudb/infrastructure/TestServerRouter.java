@@ -64,7 +64,7 @@ public class TestServerRouter implements IServerRouter {
         if (rules.stream()
                 .map(x -> x.evaluate(outMsg, this))
                 .allMatch(x -> x)) {
-            if (ctx != null && ctx instanceof TestChannelContext) {
+            if (ctx != null) {
                 ctx.writeAndFlush(outMsg);
             } else {
                 this.responseMessages.add(outMsg);
