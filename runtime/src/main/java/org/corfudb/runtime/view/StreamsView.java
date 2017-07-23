@@ -135,7 +135,7 @@ public class StreamsView extends AbstractView {
                 return tokenResponse.getTokenValue();
             } catch (OverwriteException oe) {
                 // We were overwritten, get a new token and try again.
-                log.warn("Overwrite[{}]: streams {}", tokenResponse.getTokenValue(),
+                log.warn("append[{}]: Overwrite , streams {}", tokenResponse.getTokenValue(),
                         streamIDs.stream().map(Utils::toReadableId).collect(Collectors.toSet()));
 
                 TokenResponse temp;
@@ -161,13 +161,13 @@ public class StreamsView extends AbstractView {
 
             } catch (StaleTokenException se) {
                 // the epoch changed from when we grabbed the token from sequencer
-                log.warn("StaleToken[{}]: streams {}", tokenResponse.getTokenValue(),
+                log.warn("append[{}]: StaleToken , streams {}", tokenResponse.getTokenValue(),
                         streamIDs.stream().map(Utils::toReadableId).collect(Collectors.toSet()));
 
                 throw new TransactionAbortedException(
                         conflictInfo,
                         tokenResponse.getConflictKey(),
-                        AbortCause.NEW_SEQUENCER, // TODO define a new AbortCause?
+                        AbortCause.NEW_SEQUENCER, // in the future, perhaps define a new AbortCause?
                         TransactionalContext.getCurrentContext()
                 );
             }

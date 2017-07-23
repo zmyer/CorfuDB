@@ -488,7 +488,8 @@ public class ServerRestartIT extends AbstractIT {
         CorfuRuntime corfuRuntime = createDefaultRuntime();
         TokenResponse tr = corfuRuntime.getSequencerView().nextToken(Collections.emptySet(), 1);
 
-        assertThat(tr.getEpoch() == 1);
+        assertThat(tr.getEpoch() == 1)
+            .isTrue();
 
         // Force the token response to have epoch = 0, to simulate a request received in previous epoch
         TokenResponse mockTr = new TokenResponse(tr.getToken().getTokenValue(), tr.getEpoch() - 1, Collections.emptyMap());

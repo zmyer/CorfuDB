@@ -110,11 +110,9 @@ public class BackpointerStreamView extends AbstractQueuedStreamView {
                              1);
             } catch (StaleTokenException te) {
                 log.trace("Token grew stale occurred at {}", tokenResponse);
-                if (deacquisitionCallback != null) {
-                    if (!deacquisitionCallback.apply(tokenResponse)) {
+                if (deacquisitionCallback != null && !deacquisitionCallback.apply(tokenResponse)) {
                         log.debug("Deacquisition requested abort");
                         return -1L;
-                    }
                 }
                 // Request a new token, informing the sequencer we were
                 // overwritten.
