@@ -6,6 +6,7 @@ import lombok.experimental.Accessors;
 import org.apache.commons.io.FileUtils;
 import org.corfudb.AbstractCorfuTest;
 import org.corfudb.runtime.CorfuRuntime;
+import org.corfudb.runtime.clients.SequencerClient;
 import org.corfudb.runtime.collections.SMRMap;
 import org.junit.After;
 import org.junit.Before;
@@ -13,13 +14,18 @@ import org.junit.Before;
 import java.io.*;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Integration tests.
@@ -36,8 +42,8 @@ public class AbstractIT extends AbstractCorfuTest {
     private static final String KILL_COMMAND = "pkill -9 -P ";
     private static final String FORCE_KILL_ALL_CORFU_COMMAND = "jps | grep CorfuServer|awk '{print $1}'| xargs kill -9";
 
-    private static final int SHUTDOWN_RETRIES = 10;
-    private static final long SHUTDOWN_RETRY_WAIT = 500;
+    private static final int SHUTDOWN_RETRIES = 100;
+    private static final long SHUTDOWN_RETRY_WAIT = 50;
 
     static public Properties PROPERTIES;
 
@@ -229,6 +235,8 @@ public class AbstractIT extends AbstractCorfuTest {
                                             StandardOpenOption.APPEND);
                                     Files.write(Paths.get(logfile), "\n".getBytes(),
                                             StandardOpenOption.APPEND);
+                                } catch (NoSuchFileException nsfe) {
+                                    System.out.printf("No process output available for %s.\n", logfile);
                                 } catch (Exception e) {
                                     e.printStackTrace();
                                 }
@@ -269,6 +277,10 @@ public class AbstractIT extends AbstractCorfuTest {
         }
 
         public Process runServer() throws IOException {
+            return runServer(true);
+        }
+
+        public Process runServer(boolean pollForSequencerReady) throws IOException {
             final String serverConsoleLogPath = CORFU_LOG_PATH + File.separator + host + "_" + port + "_consolelog";
 
             File logPath = new File(getCorfuServerLogPath(host, port));
@@ -281,7 +293,45 @@ public class AbstractIT extends AbstractCorfuTest {
             Process corfuServerProcess = builder.start();
             StreamGobbler streamGobbler = new StreamGobbler(corfuServerProcess.getInputStream(), serverConsoleLogPath);
             Executors.newSingleThreadExecutor().submit(streamGobbler);
+
+            if (pollForSequencerReady) {
+                pollForSequencerReady();
+            }
             return corfuServerProcess;
+        }
+
+        public void pollForSequencerReady() {
+            final int timeout = 1000;
+            final int retries = 100;
+            int count = 0;
+            AtomicBoolean done = new AtomicBoolean(false);
+            String endpoint = host + ":" + port;
+
+            while (!done.get() && count++ < retries) {
+                CorfuRuntime rt = new CorfuRuntime(endpoint);
+                CompletableFuture cf = CompletableFuture.runAsync(() -> {
+                    rt.connect();
+                    // Protocol ping isn't sufficient: server can be pingable,
+                    // but if the Sequencer isn't ready, we have not polled long enough.
+                    SequencerClient sc = new SequencerClient();
+                    sc.setRouter(rt.getRouter(endpoint));
+                    try {
+                        long token = sc.nextToken(Collections.emptySet(), 0).get().getTokenValue();
+                        done.set(true);
+                    } catch (Exception e) {
+                        //
+                    }
+                });
+                try {
+                    cf.get(timeout, TimeUnit.MILLISECONDS);
+                } catch (Exception e) {
+                    //
+                } finally {
+                    // Runtime shutdown can block us, so do it asynchronously.
+                    CompletableFuture.runAsync(() -> { rt.stop(true); });
+                    cf.cancel(true);
+                }
+            }
         }
     }
 }

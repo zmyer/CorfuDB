@@ -245,8 +245,6 @@ public class ServerRestartIT extends AbstractIT {
             // Run CORFU Server. Expect slight delay until server is running.
             System.out.println("Start Corfu Server");
             final Process corfuServerProcess = runCorfuServer();
-            // Delay (time to start)
-            Thread.sleep(PARAMETERS.TIMEOUT_NORMAL.toMillis());
             assertThat(corfuServerProcess.isAlive()).isTrue();
 
             // Initialize Client: Create Runtime (Client)
@@ -280,8 +278,6 @@ public class ServerRestartIT extends AbstractIT {
             // Restart Corfu Server
             System.out.println("Restart Corfu Server");
             Process corfuServerProcessRestart = runCorfuServer();
-            // Delay (time to restart)
-            Thread.sleep(PARAMETERS.TIMEOUT_NORMAL.toMillis());
             assertThat(corfuServerProcessRestart.isAlive()).isTrue();
 
             // Execute Transactions (once Corfu Server was restarted)
