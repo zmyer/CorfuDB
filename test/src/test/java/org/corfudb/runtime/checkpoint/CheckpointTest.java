@@ -3,7 +3,6 @@ package org.corfudb.runtime.checkpoint;
 import lombok.extern.slf4j.Slf4j;
 import com.google.common.reflect.TypeToken;
 import lombok.Getter;
-import org.assertj.core.api.ThrowableAssert;
 import org.corfudb.runtime.CorfuRuntime;
 import org.corfudb.runtime.MultiCheckpointWriter;
 import org.corfudb.runtime.collections.SMRMap;
@@ -21,7 +20,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Created by dmalkhi on 5/25/17.
@@ -334,8 +332,7 @@ public class CheckpointTest extends AbstractObjectTest {
     /**
      * This test verifies that a client that recovers a map from checkpoint,
      * but wants the map at a snapshot -earlier- than the snapshot,
-     * will either get a transactionAbortException, or get the right version of
-     * the map.
+     * will get a transactionAbortException.
      * <p>
      * It works as follows.
      * We build a map with one hundred entries [0, 1, 2, 3, ...., 99].
@@ -347,9 +344,9 @@ public class CheckpointTest extends AbstractObjectTest {
      * <p>
      * Then, we prefix-trim the log up to position 50.
      * <p>
-     * Now, we start a new runtime and instantiate this map. It should build the map from a snapshot.
-     * <p>
-     * Finally, we start a snapshot-TX at timestamp 77. We verify that the map state is [0, 1, 2, 3, ..., 76].
+     * Now, we start a new runtime and instantiate this map at 52. It should abort the transaction
+     * because the checkpoint (in a separate CP stream) is ignored and the regular stream's
+     * backpointers lead to the trimmed region.
      */
     @Test
     public void undoCkpointTest() throws Exception {
@@ -392,7 +389,7 @@ public class CheckpointTest extends AbstractObjectTest {
                             .setSnapshot(snapshotPosition - 1)
                             .begin();
 
-                    // finally, instantiate the map for the snapshot and assert is has the right state
+                    // finally, instantiate the map for the snapshot and assert the txn aborts
                     try {
                         localm2A.get(0);
                     } catch (TransactionAbortedException te) {
@@ -400,25 +397,9 @@ public class CheckpointTest extends AbstractObjectTest {
                         trimExceptionFlag.set(true);
                     }
 
-                    if (trimExceptionFlag.get() == false) {
-                        assertThat(localm2A.size())
-                                .isEqualTo(snapshotPosition);
-
-                        // check map positions 0..(snapshot-1)
-                        for (int i = 0; i < snapshotPosition; i++) {
-                            assertThat(localm2A.get(String.valueOf(i)))
-                                    .isEqualTo((long) i);
-                        }
-
-                        // check map positions snapshot..(mapSize-1)
-                        for (int i = snapshotPosition; i < mapSize; i++) {
-                            assertThat(localm2A.get(String.valueOf(i)))
-                                    .isEqualTo(null);
-                        }
-                    }
+                    assertThat(trimExceptionFlag.get()).isTrue();
                 }
         );
-
     }
 
     /**

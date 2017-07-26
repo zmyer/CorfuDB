@@ -358,44 +358,21 @@ public class CheckpointSmokeTest extends AbstractViewTest {
         // No matter where we take a snapshot of the log, a new
         // map using that snapshot should equal our history map.
         for (int globalAddr = 0; globalAddr < history.size(); globalAddr++) {
-            Map<String,Long> expectedHistory;
-            if (globalAddr <= startAddress) {
-                // Detailed history prior to startAddress is lost.
-                // The CP summary is the only data available.
-                expectedHistory = history.get((int) startAddress);
-            } else {
-                expectedHistory = history.get(globalAddr);
-            }
+            Map<String,Long> expectedHistory = history.get(globalAddr);
 
             // Instantiate new runtime & map @ snapshot of globalAddress
             setRuntime();
             Map<String, Long> m2 = instantiateMap(streamName);
 
-            // If the snapshot is prior to the checkpoint start,
-            // a trimmed exception will be thrown.
-            if (globalAddr < startAddress - 1) {
-                final long thisAddress = globalAddr;
-                assertThatThrownBy(() ->
-                        {
-                            r.getObjectsView().TXBuild()
-                                .setType(TransactionType.SNAPSHOT)
-                                .setSnapshot(thisAddress)
-                                .begin();
-                            m2.size(); // Just call any accessor
-                        })
-                        .describedAs("Snapshot at global log address " + globalAddr)
-                        .isInstanceOf(TransactionAbortedException.class);
-            } else {
-                r.getObjectsView().TXBuild()
-                        .setType(TransactionType.SNAPSHOT)
-                        .setSnapshot(globalAddr)
-                        .begin();
+            r.getObjectsView().TXBuild()
+                    .setType(TransactionType.SNAPSHOT)
+                    .setSnapshot(globalAddr)
+                    .begin();
 
-                assertThat(m2.entrySet())
-                        .describedAs("Snapshot at global log address " + globalAddr)
-                        .isEqualTo(expectedHistory.entrySet());
-                r.getObjectsView().TXEnd();
-            }
+            assertThat(m2.entrySet())
+                    .describedAs("Snapshot at global log address " + globalAddr)
+                    .isEqualTo(expectedHistory.entrySet());
+            r.getObjectsView().TXEnd();
         }
     }
 

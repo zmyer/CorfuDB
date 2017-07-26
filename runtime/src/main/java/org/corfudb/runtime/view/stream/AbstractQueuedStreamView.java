@@ -81,12 +81,6 @@ public abstract class AbstractQueuedStreamView extends
             return null;
         }
 
-        // If maxGlobal is before the checkpoint position, throw a
-        // trimmed exception
-        if (maxGlobal < context.checkpointSuccessStartAddr) {
-            throw new TrimmedException();
-        }
-
         // If checkpoint data is available, get from readCpQueue first
         NavigableSet<Long> getFrom;
         if (context.readCpQueue.size() > 0) {
@@ -132,12 +126,6 @@ public abstract class AbstractQueuedStreamView extends
         // log records less than or equal to maxGlobal.
         // Boolean includes both CHECKPOINT & DATA entries.
         boolean readQueueIsEmpty = !fillReadQueue(maxGlobal, context);
-
-        // If maxGlobal is before the checkpoint position, throw a
-        // trimmed exception
-        if (maxGlobal < context.checkpointSuccessStartAddr) {
-            throw new TrimmedException();
-        }
 
         // We always have to fill to the read queue to ensure we read up to
         // max global.
@@ -281,12 +269,6 @@ public abstract class AbstractQueuedStreamView extends
             return null;
         }
 
-        // If we're attempt to go prior to most recent checkpoint, we
-        // throw a TrimmedException.
-        if (context.globalPointer - 1 < context.checkpointSuccessStartAddr) {
-            throw new TrimmedException();
-        }
-
         // Otherwise, the previous entry should be resolved, so get
         // one less than the current.
         Long prevAddress = context
@@ -409,7 +391,13 @@ public abstract class AbstractQueuedStreamView extends
             resolvedQueue.clear();
             minResolution = Address.NON_ADDRESS;
             maxResolution = Address.NON_ADDRESS;
+            resetCheckpointSuccessMembers();
+        }
 
+        /** Reset checkpoint success state, for constructor use
+         *  or when state reset is needed later object's lifecycle.
+         */
+        public void resetCheckpointSuccessMembers() {
             checkpointSuccessId = null;
             checkpointSuccessStartAddr = Address.NEVER_READ;
             checkpointSuccessEndAddr = Address.NEVER_READ;

@@ -345,6 +345,8 @@ public class BackpointerStreamView extends AbstractQueuedStreamView {
     @Override
     protected boolean fillReadQueue(final long maxGlobal,
                                  final QueuedStreamContext context) {
+        boolean checkpointIsBeyondMaxGlobal = false;
+
         log.trace("Read_Fill_Queue[{}] Max: {}, Current: {}, Resolved: {} - {}", this,
                 maxGlobal, context.globalPointer, context.maxResolution, context.minResolution);
 
@@ -363,9 +365,17 @@ public class BackpointerStreamView extends AbstractQueuedStreamView {
                                 .nextToken(Collections.singleton(checkpointId), 0)
                                 .getToken().getTokenValue(),
                         Address.NEVER_READ, d -> resolveCheckpoint(context, d))) {
-                    log.trace("Read_Fill_Queue[{}] Using checkpoint with {} entries",
-                            this, context.readCpQueue.size());
-                    return true;
+                    if (maxGlobal < context.checkpointSuccessStartAddr) {
+                        log.trace("Read_Fill_Queue[{}]: checkpoint start {} is beyond maxGlobal {}",
+                                this, context.checkpointSuccessStartAddr, maxGlobal);
+                        checkpointIsBeyondMaxGlobal = true;
+                        context.readCpQueue.clear();
+                        context.resetCheckpointSuccessMembers();
+                    } else {
+                        log.trace("Read_Fill_Queue[{}] Using checkpoint with {} entries",
+                                this, context.readCpQueue.size());
+                        return true;
+                    }
                 }
             } catch (TrimmedException te) {
                 // If we reached a trim and didn't hit a checkpoint, this might be okay,
@@ -433,9 +443,13 @@ public class BackpointerStreamView extends AbstractQueuedStreamView {
         // should be reflected. For each address which is less than
         // maxGlobalAddress, we insert it into the read queue.
 
+        long backpointerStop = checkpointIsBeyondMaxGlobal
+                ? context.globalPointer :
+                  Long.max(context.globalPointer, context.checkpointSnapshotAddress);
+
         followBackpointers(context.id, context.readQueue,
                 latestTokenValue,
-                Long.max(context.globalPointer, context.checkpointSnapshotAddress),
+                backpointerStop,
                 d -> BackpointerOp.INCLUDE);
 
         return ! context.readCpQueue.isEmpty() || !context.readQueue.isEmpty();
