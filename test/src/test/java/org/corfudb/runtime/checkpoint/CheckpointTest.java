@@ -331,35 +331,53 @@ public class CheckpointTest extends AbstractObjectTest {
 
     /**
      * This test verifies that a client that recovers a map from checkpoint,
-     * but wants the map at a snapshot -earlier- than the snapshot,
+     * but wants the map at a snapshot -earlier- than the checkpoint,
      * will get a transactionAbortException.
+     * <p>
+     * For an optimistic transaction -earlier- than the checkpoint,
+     * we will observe the expected map value without any exception.
      * <p>
      * It works as follows.
      * We build a map with one hundred entries [0, 1, 2, 3, ...., 99].
+     * Then use thread #3 to set up our optimistic transaction.
      * <p>
-     * Note that, each entry is one put, so if a TX starts at snapshot at 77, it should see a map with 77 items 0, 1, 2, ..., 76.
-     * We are going to verify that this works even if we checkpoint the map, and trim a prefix, say of the first 50 put's.
-     * <p>
-     * First, we then take a checkpoint of the map.
+     * Then, add 2 more keys then take a checkpoint of the map.
      * <p>
      * Then, we prefix-trim the log up to position 50.
      * <p>
-     * Now, we start a new runtime and instantiate this map at 52. It should abort the transaction
-     * because the checkpoint (in a separate CP stream) is ignored and the regular stream's
+     * Now, we start a new runtime and instantiate this map at 52.
+     * It should abort the transaction because the checkpoint
+     * (in a separate CP stream) is ignored and the regular stream's
      * backpointers lead to the trimmed region.
+     * <p>
+     * Finally, check thread #3's optimistic transaction.  We should
+     * observe the correct value without exception.
      */
     @Test
-    public void undoCkpointTest() throws Exception {
+    public void snapshotAbortOptimisticNoAbortTest() throws Exception {
         final int mapSize = PARAMETERS.NUM_ITERATIONS_LOW;
         final int trimPosition = mapSize / 2;
         final int snapshotPosition = trimPosition + 2;
 
         t(1, () -> {
-
                     // first, populate the map
                     for (int i = 0; i < mapSize; i++) {
                         m2A.put(String.valueOf(i), (long) i);
                     }
+                });
+
+        // Set up optimistic checkpoint at this point in the log, prior to
+        // the checkpoint's starting point.
+        t(3, () -> {
+                    getMyRuntime().getObjectsView().TXBuild()
+                            .setType(TransactionType.OPTIMISTIC)
+                            .begin();
+                });
+
+        t(1, () -> {
+                    // Put a couple more keys, to add log distance from t3's txn start.
+                    m2A.put("extra 1", 0L);
+                    m2A.put("extra 2", 0L);
 
                     // now, take a checkpoint and perform a prefix-trim
                     MultiCheckpointWriter mcw1 = new MultiCheckpointWriter();
@@ -372,8 +390,7 @@ public class CheckpointTest extends AbstractObjectTest {
                     getMyRuntime().getAddressSpaceView().invalidateServerCaches();
                     getMyRuntime().getAddressSpaceView().invalidateClientCache();
 
-                }
-        );
+                });
 
         AtomicBoolean trimExceptionFlag = new AtomicBoolean(false);
 
@@ -391,15 +408,26 @@ public class CheckpointTest extends AbstractObjectTest {
 
                     // finally, instantiate the map for the snapshot and assert the txn aborts
                     try {
-                        localm2A.get(0);
+                        localm2A.get(String.valueOf(0));
                     } catch (TransactionAbortedException te) {
                         // this is an expected behavior!
                         trimExceptionFlag.set(true);
                     }
+                });
+        assertThat(trimExceptionFlag.get()).isTrue();
 
-                    assertThat(trimExceptionFlag.get()).isTrue();
-                }
-        );
+        // Check t3's optimistic transaction, expect no exception + correct map value
+        trimExceptionFlag.set(false);
+        t(3, () -> {
+                    try {
+                        assertThat(m2A.get(String.valueOf(0))).isEqualTo(0L);
+                    } catch (TransactionAbortedException te) {
+                        trimExceptionFlag.set(true);
+                    } finally {
+                        getMyRuntime().getObjectsView().TXEnd();
+                    }
+                });
+        assertThat(trimExceptionFlag.get()).isFalse();
     }
 
     /**
