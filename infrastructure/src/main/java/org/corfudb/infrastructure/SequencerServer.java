@@ -79,6 +79,13 @@ import static org.corfudb.protocols.wireprotocol.TokenType.TX_ABORT_SEQ_OVERFLOW
 @Slf4j
 public class SequencerServer extends AbstractServer {
 
+
+    /**
+     * key-name for storing {@link SequencerServer} state in {@link ServerContext::getDataStore()}.
+     */
+    private static final String PREFIX_SEQUENCER = "SEQUENCER";
+    private static final String KEY_STATE_DUMP = "STATE_DUMP";
+
     /**
      * Inherit from CorfuServer a server context.
      */
@@ -185,6 +192,23 @@ public class SequencerServer extends AbstractServer {
                 })
                 .recordStats()
                 .build();
+    }
+
+    /**
+     * Dumps the following sequencer state to disk:
+     * globalLogTail
+     * readyStateEpoch
+     * streamTailToGlobalTailMap
+     */
+    public void dumpState() {
+        String stateDump = "Global log tail: " + globalLogTail.get() + ", "
+                + "Ready state epoch: " + readyStateEpoch + ", "
+                + "Max conflict wildcard: " + maxConflictWildcard + ", "
+                + "Trim mark: " + trimMark + ", "
+                + "Stream tail to global tail map: " + streamTailToGlobalTailMap.toString();
+
+        log.info("SequencerState : {}", stateDump);
+        serverContext.getDataStore().put(String.class, PREFIX_SEQUENCER, KEY_STATE_DUMP, stateDump);
     }
 
     /**
@@ -314,6 +338,13 @@ public class SequencerServer extends AbstractServer {
         Token token = new Token(responseGlobalTail, r.getServerEpoch());
         r.sendResponse(ctx, msg, CorfuMsgType.TOKEN_RES.payloadMsg(new TokenResponse(
                 TokenType.NORMAL, TokenResponse.NO_CONFLICT_KEY, token, Collections.emptyMap())));
+    }
+
+    @ServerHandler(type = CorfuMsgType.SEQUENCER_STATE_DUMP, opTimer = metricsPrefix + "stateDump")
+    public void handleStateDump(CorfuMsg msg, ChannelHandlerContext ctx, IServerRouter r,
+                                boolean isMetricsEnabled) {
+        dumpState();
+        r.sendResponse(ctx, msg, CorfuMsgType.ACK.msg());
     }
 
     @ServerHandler(type = CorfuMsgType.SEQUENCER_TRIM_REQ, opTimer = metricsPrefix + "trimCache")

@@ -215,7 +215,7 @@ public class FailureHandlerDispatcher {
                 verifyStreamTailsMap(streamTails);
 
                 // Configuring the new sequencer.
-                boolean sequencerBootstrapResult = newLayout.getSequencer(0)
+                boolean sequencerBootstrapResult = newLayout.getPrimarySequencer()
                         .bootstrap(maxTokenRequested + 1, streamTails,
                                 newLayout.getEpoch()).get();
                 if (sequencerBootstrapResult) {

@@ -84,4 +84,13 @@ public class SequencerClient implements IClient {
                 .payloadMsg(new SequencerTailsRecoveryMsg(initialToken, sequencerTails,
                         readyStateEpoch)));
     }
+
+    /**
+     * Dumps the sequencer state on the local datastore.
+     *
+     * @return A CompletableFuture which completes once the sequencer state dump is completed.
+     */
+    public CompletableFuture<Boolean> dumpSequencerState() {
+        return router.sendMessageAndGetCompletable(CorfuMsgType.SEQUENCER_STATE_DUMP.msg());
+    }
 }

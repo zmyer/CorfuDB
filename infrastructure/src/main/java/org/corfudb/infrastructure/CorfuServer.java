@@ -445,6 +445,9 @@ public class CorfuServer {
                         layoutServer,
                         logUnitServer);
 
+        // Dump state before shutdown
+        sequencerServer.dumpState();
+
         // A executor service to create the shutdown threads
         // plus name the threads correctly.
         final ExecutorService shutdownService =

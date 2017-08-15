@@ -218,6 +218,13 @@ public class Layout implements Cloneable {
     }
 
     /**
+     * @return Sequencer client for the primary sequencer server.
+     */
+    public SequencerClient getPrimarySequencer() {
+        return runtime.getRouter(sequencers.get(0)).getClient(SequencerClient.class);
+    }
+
+    /**
      * Given the log's global address, return equivalent local address for a striped log segment.
      *
      * @param globalAddress The global address
