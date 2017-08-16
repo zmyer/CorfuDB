@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -159,6 +160,8 @@ public class CorfuTable<K ,V, F extends Enum<F> & CorfuTable.IndexSpecification,
 
     /** Generate a table with the given set of indexes. */
     public CorfuTable(Class<F> indexFunctionEnumClass) {
+        log.info("CorfuTable: Generated new table with secondary index {}",
+                indexFunctionEnumClass.getClass().getSimpleName());
         indexerClass = indexFunctionEnumClass;
         indexFunctions.addAll(EnumSet.allOf(indexFunctionEnumClass));
         indexFunctions.forEach(f -> indexMap.put(f, ArrayListMultimap.create()));
@@ -246,6 +249,7 @@ public class CorfuTable<K ,V, F extends Enum<F> & CorfuTable.IndexSpecification,
         return getByIndexAndFilter(indexFunction, projectionFunction, e -> true, index);
     }
 
+    final AtomicLong al = new AtomicLong(0);
     /** Scan and filter using the specified index function and projection.
      *
      * @param indexFunction         An indexing function.
@@ -272,6 +276,9 @@ public class CorfuTable<K ,V, F extends Enum<F> & CorfuTable.IndexSpecification,
             if (secondaryMap != null) {
                 // Otherwise, use the secondary index that was generated.
                 entryStream = secondaryMap.get(index).parallelStream();
+                if (al.getAndIncrement() % 1000 == 0) {
+                    log.info("getByIndexAndFilter: Secondary index lookup");
+                }
             } else {
                 // For some reason the function is not present (maybe someone passed the
                 // wrong function).
@@ -294,6 +301,8 @@ public class CorfuTable<K ,V, F extends Enum<F> & CorfuTable.IndexSpecification,
      * @param indexFunctionEnumClass
      */
     public void registerIndex(Class<F> indexFunctionEnumClass) {
+        log.info("CorfuTable: Changed to new secondary index type {}",
+                indexFunctionEnumClass.getClass().getSimpleName());
         indexerClass = indexFunctionEnumClass;
         indexMap.clear();
         indexFunctions.clear();
