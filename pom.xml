@@ -18,6 +18,7 @@
         <module>logReader</module>
         <module>debian</module>
         <module>generator</module>
+        <module>harness</module>
     </modules>
 
     <packaging>pom</packaging>
