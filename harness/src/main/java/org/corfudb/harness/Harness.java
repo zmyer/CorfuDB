@@ -1,4 +1,4 @@
-package org.corfudb.harness.orchestration;
+package org.corfudb.harness;
 
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;

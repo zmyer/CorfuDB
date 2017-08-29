@@ -20,7 +20,7 @@
         <dependency>
             <groupId>org.apache.thrift</groupId>
             <artifactId>libthrift</artifactId>
-            <version>0.9.0</version>
+            <version>0.10.0</version>
         </dependency>
     </dependencies>
 
@@ -32,6 +32,7 @@
                 <version>0.1.11</version>
                 <configuration>
                     <thriftExecutable>/usr/local/bin/thrift</thriftExecutable>
+                    <generator>java</generator>
                 </configuration>
                 <executions>
                     <execution>
@@ -49,6 +50,14 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                </configuration>
             </plugin>
         </plugins>
     </build>

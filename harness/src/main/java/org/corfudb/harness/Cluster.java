@@ -1,7 +1,6 @@
-package org.corfudb.harness.orchestration;
+package org.corfudb.harness;
 
 import org.corfudb.harness.gen.FaultType;
-import org.corfudb.harness
 import org.corfudb.harness.gen.Instance;
 import org.corfudb.runtime.CorfuRuntime;
 
