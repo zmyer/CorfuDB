@@ -31,6 +31,12 @@ import org.corfudb.util.Utils;
 @Slf4j
 public class StreamsView extends AbstractView {
 
+    /**
+     * Checkpoint of streams have their own stream id derived from the
+     * stream id. We add the checkpoint suffix to the original stream id.
+     */
+    public static final String CHECKPOINT_SUFFIX = "_cp";
+
     public StreamsView(final CorfuRuntime runtime) {
         super(runtime);
     }
@@ -111,7 +117,7 @@ public class StreamsView extends AbstractView {
                 : runtime.getSequencerView().nextToken(streamIDs, 1,
                 conflictInfo); // Token w/ conflict info
 
-        for (int x = 0; x < runtime.getWriteRetry(); x++) {
+        for (int x = 0; x < runtime.getParameters().getWriteRetry(); x++) {
 
             // Is our token a valid type?
             if (tokenResponse.getRespType() == TokenType.TX_ABORT_CONFLICT) {
@@ -189,7 +195,7 @@ public class StreamsView extends AbstractView {
 
         log.error("append[{}]: failed after {} retries , streams {}, write size {} bytes",
                 tokenResponse.getTokenValue(),
-                runtime.getWriteRetry(),
+                runtime.getParameters().getWriteRetry(),
                 streamIDs.stream().map(Utils::toReadableId).collect(Collectors.toSet()),
                 ILogData.getSerializedSize(object));
         throw new AppendException();

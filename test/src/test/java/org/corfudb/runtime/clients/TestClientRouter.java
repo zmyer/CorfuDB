@@ -10,7 +10,7 @@ import org.corfudb.infrastructure.TestServerRouter;
 import org.corfudb.protocols.wireprotocol.CorfuMsg;
 import org.corfudb.protocols.wireprotocol.CorfuMsgType;
 import org.corfudb.runtime.CorfuRuntime;
-import org.corfudb.runtime.exceptions.WrongEpochException;
+import org.corfudb.runtime.exceptions.NetworkException;
 import org.corfudb.util.CFUtils;
 
 import java.time.Duration;
@@ -22,6 +22,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import org.corfudb.util.NodeLocator;
 
 import static org.corfudb.AbstractCorfuTest.PARAMETERS;
 
@@ -51,27 +52,6 @@ public class TestClientRouter implements IClientRouter {
 
     public volatile AtomicLong requestID;
 
-
-    private long epoch;
-
-    public synchronized long getEpoch() {
-        return epoch;
-    }
-
-    /**
-     * We should never set epoch backwards
-     *
-     * @param epoch
-     */
-    public synchronized void setEpoch(long epoch) {
-        if (epoch < this.epoch) {
-            log.warn("setEpoch: Rejected attempt to set the router {}:{} to epoch {} smaller than current epoch {}",
-                    host, port, epoch, this.epoch);
-            return;
-        }
-        this.epoch = epoch;
-    }
-
     @Getter
     @Setter
     public long serverEpoch;
@@ -79,6 +59,12 @@ public class TestClientRouter implements IClientRouter {
     @Getter
     @Setter
     public UUID clientID;
+
+    private volatile boolean connected = true;
+
+    public void simulateDisconnectedEndpoint() {
+        connected = false;
+    }
 
     /**
      * New connection timeout (milliseconds)
@@ -134,7 +120,7 @@ public class TestClientRouter implements IClientRouter {
     private void handleMessage(Object o) {
         if (o instanceof CorfuMsg) {
             CorfuMsg m = (CorfuMsg) o;
-            if (validateEpochAndClientID(m, channelContext)) {
+            if (validateClientId(m)) {
                 IClient handler = handlerMap.get(m.getMsgType());
                 handler.handleMessage(m, null);
             }
@@ -194,12 +180,19 @@ public class TestClientRouter implements IClientRouter {
      */
     @Override
     public <T> CompletableFuture<T> sendMessageAndGetCompletable(ChannelHandlerContext ctx, CorfuMsg message) {
+        // Simulate a "disconnected endpoint"
+        if (!connected) {
+            log.trace("Disconnected endpoint " + host + ":" + port);
+            throw new NetworkException("Disconnected endpoint", NodeLocator.builder()
+                                                                    .host(host)
+                                                                    .port(port).build());
+        }
+
         // Get the next request ID.
         final long thisRequest = requestID.getAndIncrement();
         // Set the message fields.
         message.setClientID(clientID);
         message.setRequestID(thisRequest);
-        message.setEpoch(getEpoch());
         // Generate a future and put it in the completion table.
         final CompletableFuture<T> cf = new CompletableFuture<>();
         outstandingRequests.put(thisRequest, cf);
@@ -233,7 +226,6 @@ public class TestClientRouter implements IClientRouter {
         final long thisRequest = requestID.getAndIncrement();
         message.setClientID(clientID);
         message.setRequestID(thisRequest);
-        message.setEpoch(getEpoch());
         // Evaluate rules.
         if (rules.stream()
                 .map(x -> x.evaluate(message, this))
@@ -263,27 +255,16 @@ public class TestClientRouter implements IClientRouter {
     }
 
     /**
-     * Validate the epoch of a CorfuMsg, and send a WRONG_EPOCH response if
-     * the server is in the wrong epoch. Ignored if the message type is reset (which
-     * is valid in any epoch).
+     * Validate the client ID of a CorfuMsg.
      *
      * @param msg The incoming message to validate.
-     * @param ctx The context of the channel handler.
-     * @return True, if the epoch is correct, but false otherwise.
+     * @return True, if the clientID is correct, but false otherwise.
      */
-    public boolean validateEpochAndClientID(CorfuMsg msg, ChannelHandlerContext ctx) {
+    private boolean validateClientId(CorfuMsg msg) {
         // Check if the message is intended for us. If not, drop the message.
         if (!msg.getClientID().equals(clientID)) {
-            log.warn("Incoming message intended for client {}, our id is {}, dropping!", msg.getClientID(), clientID);
-            return false;
-        }
-        // Check if the message is in the right epoch.
-        if (!msg.getMsgType().ignoreEpoch && msg.getEpoch() != getEpoch()) {
-            CorfuMsg m = new CorfuMsg();
-            log.trace("Incoming message with wrong epoch, got {}, expected {}, message was: {}",
-                    msg.getEpoch(), getEpoch(), msg);
-             /* If this message was pending a completion, complete it with an error. */
-            completeExceptionally(msg.getRequestID(), new WrongEpochException(getEpoch()));
+            log.warn("Incoming message intended for client {}, our id is {}, dropping!",
+                    msg.getClientID(), clientID);
             return false;
         }
         return true;

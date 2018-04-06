@@ -1,13 +1,17 @@
 package org.corfudb.runtime;
 
 import org.corfudb.infrastructure.TestLayoutBuilder;
+
 import org.corfudb.runtime.clients.LogUnitClient;
 import org.corfudb.runtime.clients.TestRule;
+import org.corfudb.runtime.exceptions.unrecoverable.SystemUnavailableError;
+
 import org.corfudb.runtime.exceptions.WrongEpochException;
 import org.corfudb.runtime.view.AbstractViewTest;
 import org.corfudb.runtime.view.Layout;
 import org.corfudb.runtime.view.stream.IStreamView;
 import org.corfudb.util.CFUtils;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.time.Duration;
@@ -24,6 +28,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 public class CorfuRuntimeTest extends AbstractViewTest {
     static final int TIME_TO_WAIT_FOR_LAYOUT_IN_SEC = 5;
+    static final long TIMEOUT_CORFU_RUNTIME_IN_MS = 500;
+
+
+
+    /**
+     * Resets the router function to the default function for AbstractViewTest.
+     */
+    @Before
+    public void setDefaultRuntimeGetRouterFunction() {
+        CorfuRuntime.overrideGetRouterFunction =
+                (runtime, endpoint) -> super.getRouterFunction(runtime, endpoint);
+    }
 
     @Test
     public void checkValidLayout() throws Exception {
@@ -39,7 +55,7 @@ public class CorfuRuntimeTest extends AbstractViewTest {
         });
 
         scheduleConcurrently(PARAMETERS.NUM_ITERATIONS_LARGE, (v) -> {
-            assertThat(rt.layout.get().getRuntime()).isEqualTo(rt);
+            assertThat(rt.getLayoutView().getRuntimeLayout().getRuntime()).isEqualTo(rt);
         });
 
         executeScheduled(PARAMETERS.CONCURRENCY_TWO, PARAMETERS.TIMEOUT_LONG);
@@ -51,25 +67,19 @@ public class CorfuRuntimeTest extends AbstractViewTest {
 
         addSingleServer(SERVERS.PORT_0);
 
-        CorfuRuntime rt = new CorfuRuntime(SERVERS.ENDPOINT_0);
+        CorfuRuntime rt = getNewRuntime(getDefaultNode());
         rt.connect();
 
     }
 
     /**
-     * Ensures that we will not accept a Layout that is obsolete.
+     * Generates and bootstraps a 3 node cluster.
+     * Shuts down the management servers of the 3 nodes.
      *
-     * Test storyline:
-     * 1. Seal the 3 servers
-     * 2. Install a new Layout only on 2 of them
-     * 3. Force the client to receive the Layout only from the staled Layout server.
-     * 4. Ensure that we will never accept it.
-     *
+     * @return The generated layout.
      * @throws Exception
      */
-    @Test
-    public void doesNotUpdateToLayoutWithSmallerEpoch() throws Exception {
-
+    private Layout get3NodeLayout() throws Exception {
         addServer(SERVERS.PORT_0);
         addServer(SERVERS.PORT_1);
         addServer(SERVERS.PORT_2);
@@ -92,19 +102,34 @@ public class CorfuRuntimeTest extends AbstractViewTest {
 
         bootstrapAllServers(l);
 
-        CorfuRuntime rt = new CorfuRuntime(SERVERS.ENDPOINT_0);
-        rt.connect();
-
-
         // Shutdown management server (they interfere)
         getManagementServer(SERVERS.PORT_0).shutdown();
         getManagementServer(SERVERS.PORT_1).shutdown();
         getManagementServer(SERVERS.PORT_2).shutdown();
 
+        return l;
+    }
+
+    /**
+     * Ensures that we will not accept a Layout that is obsolete.
+     *
+     * Test storyline:
+     * 1. Seal the 3 servers
+     * 2. Install a new Layout only on 2 of them
+     * 3. Force the client to receive the Layout only from the staled Layout server.
+     * 4. Ensure that we will never accept it.
+     *
+     * @throws Exception
+     */
+    @Test
+    public void doesNotUpdateToLayoutWithSmallerEpoch() throws Exception {
+
+        CorfuRuntime rt = getRuntime(get3NodeLayout()).connect();
+
         // Seal
-        Layout currentLayout = rt.getLayoutView().getCurrentLayout();
+        Layout currentLayout = new Layout(rt.getLayoutView().getCurrentLayout());
         currentLayout.setEpoch(currentLayout.getEpoch() + 1);
-        currentLayout.moveServersToEpoch();
+        rt.getLayoutView().getRuntimeLayout(currentLayout).moveServersToEpoch();
 
         // Server2 is sealed but will not be able to commit the layout.
         addClientRule(rt, SERVERS.ENDPOINT_2,
@@ -157,19 +182,74 @@ public class CorfuRuntimeTest extends AbstractViewTest {
         IStreamView sv = runtime.getStreamsView().get(CorfuRuntime.getStreamID("test"));
         sv.append("testPayload".getBytes());
 
-        l.setRuntime(runtime);
         l.setEpoch(l.getEpoch() + 1);
-        l.moveServersToEpoch();
+        runtime.getLayoutView().getRuntimeLayout(l).moveServersToEpoch();
 
         // We need to be sure that the layout is invalidated before proceeding
         // This is what would trigger the wrong epoch exception in the consequent read.
         runtime.invalidateLayout();
-        runtime.layout.get();
 
-        LogUnitClient luc = runtime.getRouter(SERVERS.ENDPOINT_0).getClient(LogUnitClient.class);
+        LogUnitClient luc = runtime
+                .getLayoutView().getRuntimeLayout().getLogUnitClient(SERVERS.ENDPOINT_0);
 
-        assertThatThrownBy(() ->luc.read(0).get())
+        assertThatThrownBy(() -> luc.read(0).get())
                 .isInstanceOf(ExecutionException.class)
                 .hasRootCauseInstanceOf(WrongEpochException.class);
+    }
+
+    /**
+     * Implement a SystemUnavailable systemDownHandler that stops the runtime after a certain timeout.
+     *
+     * The correct behaviour for this systemDownHandler is that, once the router is disconnected during the whole timeout,
+     * a SystemUnavailableError is thrown and the runtime is shutdown.
+     *
+     * @throws Exception
+     */
+    @Test
+    public void customNetworkExceptionHandler() throws Exception {
+        class TimeoutHandler {
+            CorfuRuntime rt;
+            long maxTimeout;
+            ThreadLocal<Long> localTimeStart = new ThreadLocal<>();
+
+            TimeoutHandler(CorfuRuntime rt, long maxTimeout) {
+                this.rt = rt;
+                this.maxTimeout = maxTimeout;
+            }
+
+            void startTimeout() {
+                localTimeStart.set(System.currentTimeMillis());
+            }
+
+            void checkIfTimeout() {
+                if (System.currentTimeMillis() - localTimeStart.get() > maxTimeout) {
+                    stopRuntimeAndThrowException();
+                }
+            }
+
+            void stopRuntimeAndThrowException() {
+                rt.stop();
+                throw new SystemUnavailableError("Timeout " + maxTimeout + " elapsed");
+            }
+        }
+
+        addSingleServer(SERVERS.PORT_0);
+
+        CorfuRuntime runtime = getDefaultRuntime();
+        TimeoutHandler th = new TimeoutHandler(runtime, TIMEOUT_CORFU_RUNTIME_IN_MS);
+
+        runtime
+                .registerBeforeRpcHandler(() -> th.startTimeout())
+                .registerSystemDownHandler(() -> th.checkIfTimeout())
+                .connect();
+
+        IStreamView sv = runtime.getStreamsView().get(CorfuRuntime.getStreamID("test"));
+        sv.append("testPayload".getBytes());
+
+        simulateEndpointDisconnected(runtime);
+
+        assertThatThrownBy(() -> sv.append("testPayload".getBytes())).
+                isInstanceOf(SystemUnavailableError.class);
+
     }
 }

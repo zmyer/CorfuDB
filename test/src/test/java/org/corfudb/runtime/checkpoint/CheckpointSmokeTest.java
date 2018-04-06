@@ -40,7 +40,7 @@ public class CheckpointSmokeTest extends AbstractViewTest {
     public void setRuntime() throws Exception {
         // This module *really* needs separate & independent runtimes.
         r = getDefaultRuntime().connect(); // side-effect of using AbstractViewTest::getRouterFunction
-        r = new CorfuRuntime(getDefaultEndpoint()).connect();
+        r = getNewRuntime(getDefaultNode()).connect();
     }
 
     @Test
@@ -420,7 +420,7 @@ public class CheckpointSmokeTest extends AbstractViewTest {
                                         Object[] objects, Runnable l1, Runnable l2,
                                         boolean write1, boolean write2, boolean write3)
             throws Exception {
-        final UUID checkpointStreamID = CorfuRuntime.getStreamID(streamId.toString() + "_cp");
+        final UUID checkpointStreamID = CorfuRuntime.getCheckpointStreamIdFromId(streamId);
         BackpointerStreamView sv = new BackpointerStreamView(r, checkpointStreamID);
         Map<CheckpointEntry.CheckpointDictKey, String> mdKV = new HashMap<>();
         mdKV.put(CheckpointEntry.CheckpointDictKey.START_TIME, "The perfect time");
@@ -554,7 +554,7 @@ public class CheckpointSmokeTest extends AbstractViewTest {
         r.getAddressSpaceView().invalidateServerCaches();
         r.getAddressSpaceView().invalidateClientCache();
 
-        CorfuRuntime rt2 = new CorfuRuntime(getDefaultEndpoint()).connect();
+        CorfuRuntime rt2 = getNewRuntime(getDefaultNode()).connect();
 
         Map<String, Long> mA2 = rt2.getObjectsView()
                 .build()

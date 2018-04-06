@@ -13,9 +13,11 @@ public class SleepOperation extends Operation {
 
     public SleepOperation(State state) {
         super(state);
+        shortName = "Sleep";
     }
 
     @Override
+    @SuppressWarnings("checkstyle:ThreadSleep")
     public void execute() {
         Random rand = new Random();
 
@@ -23,7 +25,9 @@ public class SleepOperation extends Operation {
         try {
             Thread.sleep(sleepTime);
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new RuntimeException(e);
+
         }
     }
 }

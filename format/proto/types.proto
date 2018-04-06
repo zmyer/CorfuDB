@@ -35,6 +35,12 @@ message LogEntry {
     optional int64 checkpointedStreamId_least_significant = 14;
     //  Tail of the stream at the time of taking the checkpoint snapshot.
     optional int64 checkpointedStreamStartLogAddress = 15;
+
+    // ClientId is the Corfu runtime id that created this LogEntry
+    optional int64 clientId_least_significant = 16;
+    optional int64 clientId_most_significant = 17;
+    // ThreadId is the thread id that created this LogEntry
+    optional int64 threadId = 18;
 }
 
 message LogHeader {
@@ -43,8 +49,9 @@ message LogHeader {
 }
 
 message Metadata {
-    optional sfixed32 checksum = 1;
-    optional sfixed32 length = 2;
+    required sfixed32 payload_checksum = 1;
+    required sfixed32 length_checksum = 2;
+    required sfixed32 length = 3;
 }
 
 //  NodeMetrics is composed of the various metrics of a node

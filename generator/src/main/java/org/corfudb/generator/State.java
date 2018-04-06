@@ -5,6 +5,7 @@ import com.google.common.reflect.TypeToken;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 import java.util.UUID;
 
 import org.corfudb.generator.distributions.Keys;
@@ -12,7 +13,7 @@ import org.corfudb.generator.distributions.OperationCount;
 import org.corfudb.generator.distributions.Operations;
 import org.corfudb.generator.distributions.Streams;
 import org.corfudb.runtime.CorfuRuntime;
-import org.corfudb.runtime.collections.SMRMap;
+import org.corfudb.runtime.collections.CorfuTable;
 import org.corfudb.runtime.object.transactions.TransactionType;
 
 import lombok.Getter;
@@ -41,13 +42,25 @@ public class State {
     final CorfuRuntime runtime;
 
     @Getter
-    final Map<UUID, SMRMap> maps;
+    final Map<UUID, CorfuTable> maps;
+
+    @Getter
+    @Setter
+    volatile long lastSuccessfulReadOperationTimestamp = -1;
+
+    @Getter
+    @Setter
+    volatile long lastSuccessfulWriteOperationTimestamp = -1;
 
     @Getter
     @Setter
     volatile long trimMark = -1;
 
+    public final Random rand;
+
     public State(int numStreams, int numKeys, CorfuRuntime rt) {
+        rand = new Random();
+
         streams = new Streams(numStreams);
         keys = new Keys(numKeys);
         operationCount = new OperationCount();
@@ -65,11 +78,13 @@ public class State {
     }
 
     private void openObjects() {
-        for (UUID uuid : streams.getDataSet()) {
-            SMRMap<UUID, UUID> map = runtime.getObjectsView()
+        for (String id: streams.getDataSet()) {
+            UUID uuid = CorfuRuntime.getStreamID(id);
+            CorfuTable<String, String> map = runtime.getObjectsView()
                     .build()
                     .setStreamID(uuid)
-                    .setTypeToken(new TypeToken<SMRMap<UUID,UUID>>() {})
+                    .setTypeToken(new TypeToken<CorfuTable<String, String>>() {})
+                    .setArguments(new StringIndexer())
                     .open();
 
             maps.put(uuid, map);
@@ -84,7 +99,7 @@ public class State {
         return maps.get(uuid);
     }
 
-    public Collection<SMRMap> getMaps() {
+    public Collection<CorfuTable> getMaps() {
         return maps.values();
     }
 
@@ -92,8 +107,8 @@ public class State {
         runtime.getObjectsView().TXBegin();
     }
 
-    public void stopOptimisticTx() {
-        runtime.getObjectsView().TXEnd();
+    public long stopTx() {
+        return runtime.getObjectsView().TXEnd();
     }
 
     public void startSnapshotTx(long snapshot) {
@@ -104,7 +119,11 @@ public class State {
                 .begin();
     }
 
-    public void stopSnapshotTx() {
-        runtime.getObjectsView().TXEnd();
+    public void startWriteAfterWriteTx() {
+        runtime.getObjectsView()
+                .TXBuild()
+                .setType(TransactionType.WRITE_AFTER_WRITE)
+                .begin();
     }
+
 }

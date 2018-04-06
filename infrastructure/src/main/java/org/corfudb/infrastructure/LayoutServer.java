@@ -3,11 +3,11 @@ package org.corfudb.infrastructure;
 import io.netty.channel.ChannelHandlerContext;
 
 import java.lang.invoke.MethodHandles;
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 
+import javax.annotation.Nonnull;
 import lombok.Getter;
+import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 import org.corfudb.protocols.wireprotocol.CorfuMsg;
@@ -21,7 +21,6 @@ import org.corfudb.protocols.wireprotocol.LayoutPrepareResponse;
 import org.corfudb.protocols.wireprotocol.LayoutProposeRequest;
 import org.corfudb.protocols.wireprotocol.LayoutProposeResponse;
 import org.corfudb.runtime.view.Layout;
-import org.corfudb.runtime.view.Layout.LayoutSegment;
 
 /**
  * The layout server serves layouts, which are used by clients to find the
@@ -58,14 +57,6 @@ import org.corfudb.runtime.view.Layout.LayoutSegment;
 @Slf4j
 public class LayoutServer extends AbstractServer {
 
-    private static final String PREFIX_LAYOUT = "LAYOUT";
-    private static final String KEY_LAYOUT = "CURRENT";
-    private static final String PREFIX_PHASE_1 = "PHASE_1";
-    private static final String KEY_SUFFIX_PHASE_1 = "RANK";
-    private static final String PREFIX_PHASE_2 = "PHASE_2";
-    private static final String KEY_SUFFIX_PHASE_2 = "DATA";
-    private static final String PREFIX_LAYOUTS = "LAYOUTS";
-
     /**
      * The options map.
      */
@@ -78,43 +69,24 @@ public class LayoutServer extends AbstractServer {
      * Handler for this server.
      */
     @Getter
-    private CorfuMsgHandler handler = new CorfuMsgHandler()
-            .generateHandlers(MethodHandles.lookup(), this);
-
-    private static final String metricsPrefix = "corfu.server.layout.";
+    private final CorfuMsgHandler handler =
+            CorfuMsgHandler.generateHandler(MethodHandles.lookup(), this);
 
     /**
      * Returns new LayoutServer for context.
      *
      * @param serverContext context object providing settings and objects
      */
-    public LayoutServer(ServerContext serverContext) {
+    public LayoutServer(@Nonnull ServerContext serverContext) {
         this.opts = serverContext.getServerConfig();
         this.serverContext = serverContext;
 
-        if ((Boolean) opts.get("--single")) {
-            getSingleNodeLayout();
+        if (serverContext.installSingleNodeLayoutIfAbsent()) {
+            setLayoutInHistory(serverContext.getCurrentLayout());
         }
     }
 
-    private void getSingleNodeLayout() {
-        String localAddress = opts.get("--address") + ":" + opts.get("<port>");
-        setCurrentLayout(new Layout(
-                Collections.singletonList(localAddress),
-                Collections.singletonList(localAddress),
-                Collections.singletonList(new LayoutSegment(
-                        Layout.ReplicationMode.CHAIN_REPLICATION,
-                        0L,
-                        -1L,
-                        Collections.singletonList(
-                                new Layout.LayoutStripe(
-                                        Collections.singletonList(localAddress)
-                                )
-                        )
-                )),
-                0L
-        ));
-    }
+
 
     boolean checkBootstrap(CorfuMsg msg, ChannelHandlerContext ctx, IServerRouter r) {
         if (getCurrentLayout() == null) {
@@ -127,19 +99,16 @@ public class LayoutServer extends AbstractServer {
 
     // Helper Methods
 
-
     /**
      * Handle a layout request message.
      *
      * @param msg              corfu message containing LAYOUT_REQUEST
      * @param ctx              netty ChannelHandlerContext
      * @param r                server router
-     * @param isMetricsEnabled True if metrics are enabled, False otherwise
      */
-    @ServerHandler(type = CorfuMsgType.LAYOUT_REQUEST, opTimer = metricsPrefix + "request")
+    @ServerHandler(type = CorfuMsgType.LAYOUT_REQUEST)
     public synchronized void handleMessageLayoutRequest(CorfuPayloadMsg<Long> msg,
-                                                        ChannelHandlerContext ctx, IServerRouter r,
-                                                        boolean isMetricsEnabled) {
+                                                    ChannelHandlerContext ctx, IServerRouter r) {
         if (!checkBootstrap(msg, ctx, r)) {
             return;
         }
@@ -153,8 +122,8 @@ public class LayoutServer extends AbstractServer {
             //TODO figure out a strategy to deal with this situation
             long serverEpoch = serverContext.getServerEpoch();
             r.sendResponse(ctx, msg, new CorfuPayloadMsg<>(CorfuMsgType.WRONG_EPOCH, serverEpoch));
-            log.warn("Message Epoch {} ahead of Server epoch {}", epoch, serverContext
-                    .getServerConfig());
+            log.warn("handleMessageLayoutRequest: Message Epoch {} ahead of Server epoch {}",
+                    epoch, serverEpoch);
         }
     }
 
@@ -165,48 +134,24 @@ public class LayoutServer extends AbstractServer {
      * @param ctx netty ChannelHandlerContext
      * @param r   server router
      */
-    @ServerHandler(type = CorfuMsgType.LAYOUT_BOOTSTRAP, opTimer = metricsPrefix + "bootstrap")
-    public synchronized void handleMessageLayoutBootstrap(CorfuPayloadMsg<LayoutBootstrapRequest>
-                                                                      msg, ChannelHandlerContext
-            ctx, IServerRouter r,
-                                                          boolean isMetricsEnabled) {
+    @ServerHandler(type = CorfuMsgType.LAYOUT_BOOTSTRAP)
+    public synchronized void handleMessageLayoutBootstrap(
+            @NonNull CorfuPayloadMsg<LayoutBootstrapRequest> msg,
+            ChannelHandlerContext ctx,
+            @NonNull IServerRouter r) {
+
         if (getCurrentLayout() == null) {
-            log.info("Bootstrap with new layout={}, {}", msg.getPayload().getLayout(), msg);
+            log.info("handleMessageLayoutBootstrap: Bootstrap with new layout={}, {}",
+                    msg.getPayload().getLayout(), msg);
             setCurrentLayout(msg.getPayload().getLayout());
-            serverContext.setServerEpoch(getCurrentLayout().getEpoch());
+            serverContext.setServerEpoch(getCurrentLayout().getEpoch(), r);
             //send a response that the bootstrap was successful.
             r.sendResponse(ctx, msg, new CorfuMsg(CorfuMsgType.ACK));
         } else {
             // We are already bootstrapped, bootstrap again is not allowed.
-            log.warn("Got a request to bootstrap a server which is already bootstrapped, "
-                    + "rejecting!");
+            log.warn("handleMessageLayoutBootstrap: Got a request to bootstrap a server which is "
+                    + "already bootstrapped, rejecting!");
             r.sendResponse(ctx, msg, new CorfuMsg(CorfuMsgType.LAYOUT_ALREADY_BOOTSTRAP));
-        }
-    }
-
-    /**
-     * Respond to a epoch change message.
-     *
-     * @param msg The incoming message
-     * @param ctx The channel context
-     * @param r   The server router.
-     */
-    @ServerHandler(type = CorfuMsgType.SET_EPOCH, opTimer = metricsPrefix + "set-epoch")
-    public synchronized void handleMessageSetEpoch(CorfuPayloadMsg<Long> msg,
-                                                   ChannelHandlerContext ctx, IServerRouter r,
-                                                   boolean isMetricsEnabled) {
-        if (!checkBootstrap(msg, ctx, r)) {
-            return;
-        }
-        long serverEpoch = getServerEpoch();
-        if (msg.getPayload() >= serverEpoch) {
-            log.info("Received SET_EPOCH, moving to new epoch {}", msg.getPayload());
-            setServerEpoch(msg.getPayload());
-            r.sendResponse(ctx, msg, new CorfuMsg(CorfuMsgType.ACK));
-        } else {
-            log.debug("Rejected SET_EPOCH currrent={}, requested={}", serverEpoch,
-                    msg.getPayload());
-            r.sendResponse(ctx, msg, new CorfuPayloadMsg<>(CorfuMsgType.WRONG_EPOCH, serverEpoch));
         }
     }
 
@@ -219,11 +164,12 @@ public class LayoutServer extends AbstractServer {
      */
     // TODO this can work under a separate lock for this step as it does not change the global
     // components
-    @ServerHandler(type = CorfuMsgType.LAYOUT_PREPARE, opTimer = metricsPrefix + "prepare")
-    public synchronized void handleMessageLayoutPrepare(CorfuPayloadMsg<LayoutPrepareRequest>
-                                                                    msg, ChannelHandlerContext
-            ctx, IServerRouter r,
-                                                        boolean isMetricsEnabled) {
+    @ServerHandler(type = CorfuMsgType.LAYOUT_PREPARE)
+    public synchronized void handleMessageLayoutPrepare(
+            @NonNull CorfuPayloadMsg<LayoutPrepareRequest> msg,
+            ChannelHandlerContext ctx,
+            @NonNull IServerRouter r) {
+
         // Check if the prepare is for the correct epoch
         if (!checkBootstrap(msg, ctx, r)) {
             return;
@@ -235,7 +181,8 @@ public class LayoutServer extends AbstractServer {
         long serverEpoch = getServerEpoch();
         if (msg.getPayload().getEpoch() != serverEpoch) {
             r.sendResponse(ctx, msg, new CorfuPayloadMsg<>(CorfuMsgType.WRONG_EPOCH, serverEpoch));
-            log.trace("Incoming message with wrong epoch, got {}, expected {}, message was: {}",
+            log.trace("handleMessageLayoutPrepare: Incoming message with wrong epoch, got {}, "
+                            + "expected {}, message was: {}",
                     msg.getPayload().getEpoch(), serverEpoch, msg);
             return;
         }
@@ -243,15 +190,18 @@ public class LayoutServer extends AbstractServer {
 
         // This is a prepare. If the rank is less than or equal to the phase 1 rank, reject.
         if (phase1Rank != null && prepareRank.lessThanEqualTo(phase1Rank)) {
-            log.debug("Rejected phase 1 prepare of rank={}, phase1Rank={}", prepareRank,
-                    phase1Rank);
+            log.debug("handleMessageLayoutPrepare: Rejected phase 1 prepare of rank={}, "
+                    + "phase1Rank={}", prepareRank, phase1Rank);
             r.sendResponse(ctx, msg, CorfuMsgType.LAYOUT_PREPARE_REJECT.payloadMsg(new
                     LayoutPrepareResponse(phase1Rank.getRank(), proposedLayout)));
         } else {
+            // Return the layout with the highest rank proposed before.
+            Rank highestProposedRank = proposedLayout == null ? new Rank(-1L, msg.getClientID())
+                    : getPhase2Rank();
             setPhase1Rank(prepareRank);
-            log.debug("New phase 1 rank={}", getPhase1Rank());
+            log.debug("handleMessageLayoutPrepare: New phase 1 rank={}", getPhase1Rank());
             r.sendResponse(ctx, msg, CorfuMsgType.LAYOUT_PREPARE_ACK.payloadMsg(new
-                    LayoutPrepareResponse(prepareRank.getRank(), proposedLayout)));
+                    LayoutPrepareResponse(highestProposedRank.getRank(), proposedLayout)));
         }
     }
 
@@ -263,12 +213,12 @@ public class LayoutServer extends AbstractServer {
      * @param ctx netty ChannelHandlerContext
      * @param r   server router
      */
-    @ServerHandler(type = CorfuMsgType.LAYOUT_PROPOSE, opTimer = metricsPrefix + "propose")
-    public synchronized void handleMessageLayoutPropose(CorfuPayloadMsg<LayoutProposeRequest>
-                                                                    msg, ChannelHandlerContext
-            ctx, IServerRouter r,
-                                                        boolean isMetricsEnabled) {
-        // Check if the propose is for the correct epoch
+    @ServerHandler(type = CorfuMsgType.LAYOUT_PROPOSE)
+    public synchronized void handleMessageLayoutPropose(
+            @NonNull CorfuPayloadMsg<LayoutProposeRequest> msg,
+            ChannelHandlerContext ctx,
+            @NonNull IServerRouter r) {
+
         if (!checkBootstrap(msg, ctx, r)) {
             return;
         }
@@ -277,44 +227,78 @@ public class LayoutServer extends AbstractServer {
 
         long serverEpoch = getServerEpoch();
 
+        // Check if the propose is for the correct epoch
         if (msg.getPayload().getEpoch() != serverEpoch) {
             r.sendResponse(ctx, msg, new CorfuPayloadMsg<>(CorfuMsgType.WRONG_EPOCH, serverEpoch));
-            log.trace("Incoming message with wrong epoch, got {}, expected {}, message was: {}",
+            log.trace("handleMessageLayoutPropose: Incoming message with wrong epoch, got {}, "
+                            + "expected {}, message was: {}",
                     msg.getPayload().getEpoch(), serverEpoch, msg);
             return;
         }
         // This is a propose. If no prepare, reject.
         if (phase1Rank == null) {
-            log.debug("Rejected phase 2 propose of rank={}, phase1Rank=none", proposeRank);
+            log.debug("handleMessageLayoutPropose: Rejected phase 2 propose of rank={}, "
+                    + "phase1Rank=none", proposeRank);
             r.sendResponse(ctx, msg, CorfuMsgType.LAYOUT_PROPOSE_REJECT.payloadMsg(new
                     LayoutProposeResponse(-1)));
             return;
         }
-        // This is a propose. If the rank is less than or equal to the phase 1 rank, reject.
+        // This is a propose. If the rank in the proposal is less than or equal to the highest yet
+        // observed prepare rank, reject.
         if (!proposeRank.equals(phase1Rank)) {
-            log.debug("Rejected phase 2 propose of rank={}, phase1Rank={}", proposeRank,
-                    phase1Rank);
+            log.debug("handleMessageLayoutPropose: Rejected phase 2 propose of rank={}, "
+                    + "phase1Rank={}", proposeRank, phase1Rank);
             r.sendResponse(ctx, msg, CorfuMsgType.LAYOUT_PROPOSE_REJECT.payloadMsg(new
                     LayoutProposeResponse(phase1Rank.getRank())));
             return;
         }
         Rank phase2Rank = getPhase2Rank();
         Layout proposeLayout = msg.getPayload().getLayout();
-        // In addition, if the rank is equal to the current phase 2 rank (already accepted
-        // message), reject.
+        // In addition, if the rank in the propose message is equal to the current phase 2 rank
+        // (already accepted message), reject.
         // This can happen in case of duplicate messages.
         if (phase2Rank != null && proposeRank.equals(phase2Rank)) {
-            log.debug("Rejected phase 2 propose of rank={}, phase2Rank={}", proposeRank,
-                    phase2Rank);
+            log.debug("handleMessageLayoutPropose: Rejected phase 2 propose of rank={}, "
+                    + "phase2Rank={}", proposeRank, phase2Rank);
             r.sendResponse(ctx, msg, CorfuMsgType.LAYOUT_PROPOSE_REJECT.payloadMsg(new
                     LayoutProposeResponse(phase2Rank.getRank())));
             return;
         }
 
-        log.debug("New phase 2 rank={},  layout={}", proposeRank, proposeLayout);
+        log.debug("handleMessageLayoutPropose: New phase 2 rank={},  layout={}",
+                proposeRank, proposeLayout);
         setPhase2Data(new Phase2Data(proposeRank, proposeLayout));
         r.sendResponse(ctx, msg, new CorfuMsg(CorfuMsgType.ACK));
     }
+
+
+    /**
+     * Force layout enables the server to bypass consensus
+     * and accept a new layout.
+     *
+     * @param msg              corfu message containing LAYOUT_FORCE
+     * @param ctx              netty ChannelHandlerContext
+     * @param r                server router
+     */
+    private synchronized void forceLayout(@Nonnull CorfuPayloadMsg<LayoutCommittedRequest> msg,
+                                               @Nonnull ChannelHandlerContext ctx,
+                                               @Nonnull IServerRouter r) {
+        LayoutCommittedRequest req = msg.getPayload();
+
+        if (req.getEpoch() != getServerEpoch()) {
+            // return can't force old epochs
+            r.sendResponse(ctx, msg, new CorfuMsg(CorfuMsgType.NACK));
+            log.warn("forceLayout: Trying to force a layout with an old epoch. Layout {}, " +
+                    "current epoch {}", req.getLayout(), getServerEpoch());
+            return;
+        }
+
+        setCurrentLayout(req.getLayout());
+        serverContext.setServerEpoch(req.getLayout().getEpoch(), r);
+        log.warn("forceLayout: Forcing new layout {}", req.getLayout());
+        r.sendResponse(ctx, msg, new CorfuMsg(CorfuMsgType.ACK));
+    }
+
 
     /**
      * Accepts any committed layouts for the current epoch or newer epochs.
@@ -326,14 +310,19 @@ public class LayoutServer extends AbstractServer {
      */
     // TODO If a server does not get SET_EPOCH layout commit message cannot reach it
     // TODO as this message is not set to ignore EPOCH.
-    // TODO How do we handle holes in history if let in layout commit message. Maybe we have a
+    // TODO How do we handle holes in history if we let in layout commit message. Maybe we have a
     // hole filling process
-    // TODO how do reject the older epoch commits, should it be an explicit NACK.
-    @ServerHandler(type = CorfuMsgType.LAYOUT_COMMITTED, opTimer = metricsPrefix + "committed")
-    public synchronized void handleMessageLayoutCommit(CorfuPayloadMsg<LayoutCommittedRequest>
-                                                                   msg, ChannelHandlerContext
-            ctx, IServerRouter r,
-                                                       boolean isMetricsEnabled) {
+    @ServerHandler(type = CorfuMsgType.LAYOUT_COMMITTED)
+    public synchronized void handleMessageLayoutCommit(
+            @NonNull CorfuPayloadMsg<LayoutCommittedRequest> msg,
+            ChannelHandlerContext ctx,
+            @NonNull IServerRouter r) {
+
+        if (msg.getPayload().getForce()) {
+            forceLayout(msg, ctx, r);
+            return;
+        }
+
         Layout commitLayout = msg.getPayload().getLayout();
         if (!checkBootstrap(msg, ctx, r)) {
             return;
@@ -345,72 +334,45 @@ public class LayoutServer extends AbstractServer {
         }
 
         setCurrentLayout(commitLayout);
-        setServerEpoch(msg.getPayload().getEpoch());
+        serverContext.setServerEpoch(msg.getPayload().getEpoch(), r);
+        log.info("New layout committed: {}", commitLayout);
         r.sendResponse(ctx, msg, new CorfuMsg(CorfuMsgType.ACK));
-    }
-
-    /**
-     * Validate the epoch of a CorfuMsg, and send a WRONG_EPOCH response if
-     * the server is in the wrong epoch. Ignored if the message type is reset (which
-     * is valid in any epoch).
-     *
-     * @param msg The incoming message to validate.
-     * @param ctx The context of the channel handler.
-     * @return True, if the epoch is correct, but false otherwise.
-     */
-    public boolean validateEpoch(CorfuMsg msg, ChannelHandlerContext ctx, IServerRouter r) {
-        long serverEpoch = getServerEpoch();
-        if (msg.getEpoch() != serverEpoch) {
-            r.sendResponse(ctx, msg, new CorfuPayloadMsg<>(CorfuMsgType.WRONG_EPOCH, serverEpoch));
-            log.trace("Incoming message with wrong epoch, got {}, expected {}, message was: {}",
-                    msg.getEpoch(), serverEpoch, msg);
-            return false;
-        }
-        return true;
     }
 
 
     public Layout getCurrentLayout() {
-        return serverContext.getDataStore().get(Layout.class, PREFIX_LAYOUT, KEY_LAYOUT);
+        return serverContext.getCurrentLayout();
     }
 
     /**
      * Sets the current layout in context DataStore.
+     *
      * @param layout layout to set
      */
     public void setCurrentLayout(Layout layout) {
-        serverContext.getDataStore().put(Layout.class, PREFIX_LAYOUT, KEY_LAYOUT, layout);
+        serverContext.setCurrentLayout(layout);
         // set the layout in history as well
         setLayoutInHistory(layout);
     }
 
     public Rank getPhase1Rank() {
-        return serverContext.getDataStore().get(Rank.class, PREFIX_PHASE_1, serverContext
-                .getServerEpoch() + KEY_SUFFIX_PHASE_1);
+        return serverContext.getPhase1Rank();
     }
 
     public void setPhase1Rank(Rank rank) {
-        serverContext.getDataStore().put(Rank.class, PREFIX_PHASE_1, serverContext
-                .getServerEpoch() + KEY_SUFFIX_PHASE_1, rank);
+        serverContext.setPhase1Rank(rank);
     }
 
     public Phase2Data getPhase2Data() {
-        return serverContext.getDataStore().get(Phase2Data.class, PREFIX_PHASE_2, serverContext
-                .getServerEpoch() + KEY_SUFFIX_PHASE_2);
+        return serverContext.getPhase2Data();
     }
 
     public void setPhase2Data(Phase2Data phase2Data) {
-        serverContext.getDataStore().put(Phase2Data.class, PREFIX_PHASE_2, serverContext
-                .getServerEpoch() + KEY_SUFFIX_PHASE_2, phase2Data);
+        serverContext.setPhase2Data(phase2Data);
     }
 
     public void setLayoutInHistory(Layout layout) {
-        serverContext.getDataStore().put(Layout.class, PREFIX_LAYOUTS, String.valueOf(layout
-                .getEpoch()), layout);
-    }
-
-    private void setServerEpoch(long serverEpoch) {
-        serverContext.setServerEpoch(serverEpoch);
+        serverContext.setLayoutInHistory(layout);
     }
 
     private long getServerEpoch() {
@@ -418,25 +380,8 @@ public class LayoutServer extends AbstractServer {
     }
 
     /**
-     * Returns the layout history.
-     * @return list of layouts in the history
-     */
-    public List<Layout> getLayoutHistory() {
-        List<Layout> layouts = serverContext.getDataStore().getAll(Layout.class, PREFIX_LAYOUTS);
-        Collections.sort(layouts, (a, b) -> {
-            if (a.getEpoch() > b.getEpoch()) {
-                return 1;
-            } else if (a.getEpoch() < b.getEpoch()) {
-                return -1;
-            } else {
-                return 0;
-            }
-        });
-        return layouts;
-    }
-
-    /**
      * Returns the phase 2 rank.
+     *
      * @return the phase 2 rank
      */
     public Rank getPhase2Rank() {
@@ -449,6 +394,7 @@ public class LayoutServer extends AbstractServer {
 
     /**
      * Returns the proposed layout received in phase 2 data.
+     *
      * @return the proposed layout
      */
     public Layout getProposedLayout() {

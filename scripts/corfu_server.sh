@@ -40,9 +40,11 @@ fi
 CORFUDB_HEAP="${CORFUDB_HEAP:-2000}"
 export JVMFLAGS="-Xmx${CORFUDB_HEAP}m $SERVER_JVMFLAGS"
 
-while true; do
-"$JAVA" -cp "$CLASSPATH" $JVMFLAGS org.corfudb.infrastructure.CorfuServer $*
-if [ $? -ne 100 ]; then
-break
+if [[ $* == *--agent* ]]
+then
+      byteman="-javaagent:"${BYTEMAN_HOME}"/lib/byteman.jar=listener:true"
+else
+      byteman=""
 fi
-done
+
+"$JAVA" -cp "$CLASSPATH" $JVMFLAGS $byteman org.corfudb.infrastructure.CorfuServer $*

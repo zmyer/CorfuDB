@@ -10,9 +10,9 @@ import java.util.concurrent.TimeoutException;
 
 import lombok.extern.slf4j.Slf4j;
 
-import org.corfudb.runtime.clients.BaseClient;
 import org.corfudb.runtime.exceptions.NetworkException;
 import org.corfudb.runtime.exceptions.QuorumUnreachableException;
+import org.corfudb.runtime.exceptions.unrecoverable.UnrecoverableCorfuInterruptedError;
 import org.corfudb.util.CFUtils;
 
 /**
@@ -26,18 +26,19 @@ public class SealServersHelper {
     /**
      * Asynchronously set remote epoch on all servers of layout.
      *
-     * @param layout Layout to be sealed.
+     * @param runtimeLayout RuntimeLayout stamped with the layout to be sealed.
      * @return A map of completableFutures for every remoteSetEpoch call.
      */
-    public static Map<String, CompletableFuture<Boolean>> asyncSetRemoteEpoch(Layout layout) {
+    public static Map<String, CompletableFuture<Boolean>> asyncSetRemoteEpoch(
+            RuntimeLayout runtimeLayout) {
+        Layout layout = runtimeLayout.getLayout();
         Map<String, CompletableFuture<Boolean>> resultMap = new HashMap<>();
         // Seal layout servers
         layout.getAllServers().forEach(server -> {
-            BaseClient baseClient = layout.getRuntime().getRouter(server)
-                    .getClient(BaseClient.class);
             CompletableFuture<Boolean> cf = new CompletableFuture<>();
             try {
-                cf = baseClient.setRemoteEpoch(layout.getEpoch());
+                // Creating router can cause NetworkException which should be handled.
+                cf = runtimeLayout.getBaseClient(server).setRemoteEpoch(layout.getEpoch());
             } catch (NetworkException ne) {
                 cf.completeExceptionally(ne);
                 log.error("Remote seal SET_EPOCH failed for server {} with {}", server, ne);
@@ -66,7 +67,7 @@ public class SealServersHelper {
     }
 
     /**
-     * Wait for all log unit servers in every stripe to be sealed.
+     * Wait for at least one log unit servers in every stripe to be sealed.
      *
      * @param layoutSegment        Layout segment to be sealed.
      * @param completableFutureMap A map of completableFutures for every remoteSetEpoch call.
@@ -79,15 +80,27 @@ public class SealServersHelper {
         for (Layout.LayoutStripe layoutStripe : layoutSegment.getStripes()) {
             CompletableFuture<Boolean>[] completableFutures =
                     completableFutureMap.entrySet().stream()
-                    .filter(pair -> layoutStripe.getLogServers().contains(pair.getKey()))
-                    .map(pair -> pair.getValue())
-                    .toArray(CompletableFuture[]::new);
+                            .filter(pair -> layoutStripe.getLogServers().contains(pair.getKey()))
+                            .map(pair -> pair.getValue())
+                            .toArray(CompletableFuture[]::new);
+            QuorumFuturesFactory.CompositeFuture<Boolean> quorumFuture =
+                    QuorumFuturesFactory.getFirstWinsFuture(Boolean::compareTo, completableFutures);
+
+            boolean success = false;
             try {
-                for (CompletableFuture<Boolean> cf : completableFutures) {
-                    CFUtils.getUninterruptibly(cf, TimeoutException.class);
-                }
+                success = CFUtils.getUninterruptibly(quorumFuture,
+                        TimeoutException.class, QuorumUnreachableException.class);
             } catch (TimeoutException e) {
-                throw new QuorumUnreachableException(0, layoutStripe.getLogServers().size());
+                log.error("waitForChainSegmentSeal: timeout", e);
+            }
+
+            int reachableServers = (int) Arrays.stream(completableFutures)
+                    .filter(booleanCompletableFuture ->
+                            !booleanCompletableFuture.isCompletedExceptionally()).count();
+
+            if (!success) {
+                throw new QuorumUnreachableException(reachableServers,
+                        completableFutures.length);
             }
         }
     }
@@ -126,7 +139,9 @@ public class SealServersHelper {
                 QuorumFuturesFactory.getQuorumFuture(Boolean::compareTo, completableFutures);
         try {
             success = quorumFuture.get();
-        } catch (ExecutionException | InterruptedException e) {
+        } catch (InterruptedException ie) {
+            throw new UnrecoverableCorfuInterruptedError("Sealing interrupted", ie);
+        } catch (ExecutionException e) {
             if (e.getCause() instanceof QuorumUnreachableException) {
                 throw (QuorumUnreachableException) e.getCause();
             }
